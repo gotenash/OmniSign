@@ -111,9 +111,7 @@
     <div class="main-container">
         <div class="preview-area" id="drop-zone">
             <div class="screen-mockup" id="preview-screen" 
-                 onmousedown="handleMouseDown(event)" 
-                 onmousemove="handleMouseMove(event)" 
-                 onmouseup="handleMouseUp(event)">
+                 onmousedown="handleMouseDown(event)">
                 <!-- Rendu dynamique ici -->
             </div>
             <p id="item-info" style="margin-top: 10px; color: #bdc3c7;">Dessinez un cadre sur l'écran pour ajouter une zone</p>
@@ -250,7 +248,11 @@
         let useGrid = true;
         const GRID_SIZE = 2; // Taille de la grille en %
 
-        let startX, startY; // Position de la souris au clic (%)
+        let undoStack = [];
+        let redoStack = [];
+        const MAX_UNDO_STATES = 20; // Limite l'historique à 20 états
+
+        let startX, startY, offsetX, offsetY; // Position de la souris au clic (%)
         let initialX, initialY, initialW, initialH; // Géométrie initiale de la zone (%)
         let currentDrawingZone = null;
 
@@ -344,7 +346,7 @@
         function updateResolution() {
             playlistData.resolution = document.getElementById('screen-res').value;
             const screen = document.getElementById('preview-screen');
-            const ratio = playlistData.resolution.split('/');
+            const ratio = (playlistData.resolution || "16/9").split('/');
             const baseHeight = 400; 
             screen.style.height = baseHeight + 'px';
             screen.style.width = (baseHeight * (ratio[0]/ratio[1])) + 'px';
@@ -449,6 +451,7 @@
                 if (!bgLayer) {
                     bgLayer = document.createElement('img');
                     bgLayer.className = 'bg-layer';
+                    bgLayer.draggable = false;
                     screen.prepend(bgLayer);
                 }
                 bgLayer.src = playlistData.backgroundUrl + PREVIEW_AUTH;
@@ -559,12 +562,30 @@
 
         function handleMouseDown(e) {
             if (selectedIndex === -1) return;
+            
+            // Empêche le drag natif du navigateur sur les images de fond
+            if (e.target.tagName === 'IMG') e.preventDefault();
+
+            // On ne commence à dessiner que si on clique sur le fond de l'écran
+            // (Le stopPropagation dans startMoving gère déjà les zones existantes)
+            if (e.target !== e.currentTarget && !e.target.classList.contains('bg-layer')) return;
+
             mode = 'drawing';
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+
             const rect = document.getElementById('preview-screen').getBoundingClientRect();
             startX = ((e.clientX - rect.left) / rect.width) * 100;
             startY = ((e.clientY - rect.top) / rect.height) * 100;
+
             currentDrawingZone = document.createElement('div');
-            currentDrawingZone.className = 'zone';
+            currentDrawingZone.className = 'zone selected';
+            currentDrawingZone.style.left = applySnap(startX) + '%';
+            currentDrawingZone.style.top = applySnap(startY) + '%';
+            currentDrawingZone.style.width = '0%';
+            currentDrawingZone.style.height = '0%';
+            currentDrawingZone.style.zIndex = '1000';
+            currentDrawingZone.style.pointerEvents = 'none'; // Empêche le drag de la zone en cours de dessin
             document.getElementById('preview-screen').appendChild(currentDrawingZone);
         }
 
@@ -586,34 +607,57 @@
                 currentDrawingZone.style.height = Math.abs(nY - sY) + '%';
             } else if (mode === 'moving') {
                 const zone = playlistData.items[selectedIndex].zones[selectedZoneIndex];
-                zone.x = applySnap(initialX + (nowX - startX));
-                zone.y = applySnap(initialY + (nowY - startY));
+                zone.x = applySnap(nowX - offsetX);
+                zone.y = applySnap(nowY - offsetY);
+                
+                // Contraintes de bordures (0-100%)
+                if (zone.x < 0) zone.x = 0;
+                if (zone.y < 0) zone.y = 0;
+                if (zone.x + zone.w > 100) zone.x = 100 - zone.w;
+                if (zone.y + zone.h > 100) zone.y = 100 - zone.h;
+                
+                // Pas de saveStateForUndo ici, car c'est un mouvement continu
                 renderPreview();
             } else if (mode === 'resizing') {
                 const zone = playlistData.items[selectedIndex].zones[selectedZoneIndex];
-                zone.w = applySnap(initialW + (nowX - startX));
-                zone.h = applySnap(initialH + (nowY - startY));
+                zone.w = Math.max(GRID_SIZE, applySnap(initialW + (nowX - startX)));
+                zone.h = Math.max(GRID_SIZE, applySnap(initialH + (nowY - startY)));
+                
+                // Empêcher de sortir par la droite ou le bas
+                if (zone.x + zone.w > 100) zone.w = 100 - zone.x;
+                if (zone.y + zone.h > 100) zone.h = 100 - zone.y;
+                // Pas de saveStateForUndo ici, car c'est un redimensionnement continu
+
                 renderPreview();
             }
         }
 
         function handleMouseUp() {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+
             if (mode === 'drawing' && currentDrawingZone) {
-                const zone = {
-                    x: parseFloat(currentDrawingZone.style.left),
-                    y: parseFloat(currentDrawingZone.style.top),
+                const rect = {
+                    l: parseFloat(currentDrawingZone.style.left),
+                    t: parseFloat(currentDrawingZone.style.top),
                     w: parseFloat(currentDrawingZone.style.width),
-                    h: parseFloat(currentDrawingZone.style.height),
+                    h: parseFloat(currentDrawingZone.style.height)
+                };
+                currentDrawingZone.remove();
+
+                const zone = {
+                    x: rect.l, y: rect.t, w: rect.w, h: rect.h,
                     type: 'text', url: '', text: 'Nouveau Texte' // Default to text for new zones
                 };
-                if (zone.w > 2) {
+                if (zone.w >= GRID_SIZE && zone.h >= GRID_SIZE) {
+                    saveStateForUndo(); // Sauvegarder l'état AVANT la modification
                     playlistData.items[selectedIndex].zones = playlistData.items[selectedIndex].zones || [];
                     // Initialiser les propriétés de texte par défaut si c'est une zone de texte
                     if (zone.type === 'text') initializeNewTextZone(zone);
+                    // Si c'est une horloge, initialiser les propriétés par défaut
+                    if (zone.type === 'clock') initializeNewClockZone(zone);
                     playlistData.items[selectedIndex].zones.push(zone);
                     selectZone(playlistData.items[selectedIndex].zones.length - 1);
-                } else {
-                    currentDrawingZone.remove();
                 }
             }
             mode = 'none';
@@ -621,24 +665,36 @@
         }
 
         function startMoving(e, idx) {
+            // Si on clique sur le resizer, ce n'est pas un déplacement
+            if (e.target.classList.contains('resizer')) {
+                return;
+            }
             e.stopPropagation();
+            saveStateForUndo(); // Sauvegarder l'état AVANT le mouvement
             selectZone(idx);
             mode = 'moving';
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
             const rect = document.getElementById('preview-screen').getBoundingClientRect();
             startX = ((e.clientX - rect.left) / rect.width) * 100;
             startY = ((e.clientY - rect.top) / rect.height) * 100;
             initialX = playlistData.items[selectedIndex].zones[idx].x;
             initialY = playlistData.items[selectedIndex].zones[idx].y;
+            offsetX = startX - initialX;
+            offsetY = startY - initialY;
         }
 
         function startResizing(e) {
             e.stopPropagation();
             mode = 'resizing';
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
             const rect = document.getElementById('preview-screen').getBoundingClientRect();
             startX = ((e.clientX - rect.left) / rect.width) * 100;
             startY = ((e.clientY - rect.top) / rect.height) * 100;
             initialW = playlistData.items[selectedIndex].zones[selectedZoneIndex].w;
             initialH = playlistData.items[selectedIndex].zones[selectedZoneIndex].h;
+            saveStateForUndo(); // Sauvegarder l'état avant de commencer le redimensionnement
         }
 
         function selectZone(idx) {
@@ -750,6 +806,7 @@
 
         function updatePageBgColor() {
             if (selectedIndex === -1) return;
+            saveStateForUndo();
             playlistData.items[selectedIndex].backgroundColor = document.getElementById('page-bg-color').value;
             renderPreview();
         }
@@ -759,6 +816,7 @@
 
         function moveZone(delta) {
             if (selectedIndex === -1 || selectedZoneIndex === -1) return;
+            saveStateForUndo();
             const zones = playlistData.items[selectedIndex].zones;
             const newIndex = selectedZoneIndex + delta;
             if (newIndex >= 0 && newIndex < zones.length) {
@@ -769,6 +827,7 @@
         }
 
         function addNewItem() {
+            saveStateForUndo();
             playlistData.items.push({ 
                 duration: 5000, 
                 zones: [] 
@@ -782,6 +841,7 @@
 
         function deleteCurrentItemByIndex(index) {
             if (!confirm('Voulez-vous vraiment supprimer cette vignette ?')) return;
+            saveStateForUndo();
             playlistData.items.splice(index, 1);
             if (selectedIndex === index) {
                 selectedIndex = -1;
@@ -796,6 +856,7 @@
         }
 
         function duplicateItemByIndex(index) {
+            saveStateForUndo();
             const originalItem = playlistData.items[index];
             const newItem = JSON.parse(JSON.stringify(originalItem)); // Clone profond (zones incluses)
             playlistData.items.splice(index + 1, 0, newItem);
@@ -805,18 +866,81 @@
         // Initialisation des propriétés de texte par défaut pour une nouvelle zone
         function initializeNewTextZone(zone) {
             zone.fontFamily = 'Arial, sans-serif';
+            zone.fontUrl = null; // Pas de police personnalisée par défaut
             zone.fontSize = 24;
             zone.color = '#ffffff';
             zone.textAlign = 'center';
-            zone.clockFormat = 'HH:mm:ss';
+            zone.isMarquee = false;
         }
+
+        // Initialisation des propriétés d'horloge par défaut pour une nouvelle zone
+        function initializeNewClockZone(zone) {
+            zone.fontFamily = 'Arial, sans-serif';
+            zone.fontUrl = null; // Pas de police personnalisée par défaut
+            zone.fontSize = 24;
+            zone.color = '#ffffff';
+            zone.textAlign = 'center';
+            zone.clockFormat = 'HH:mm:ss'; // Format par défaut
+        }
+
+        function saveStateForUndo() {
+            redoStack = []; // Clear redo stack on new action
+            undoStack.push(JSON.parse(JSON.stringify(playlistData)));
+            if (undoStack.length > MAX_UNDO_STATES) {
+                undoStack.shift(); // Remove the oldest state
+            }
+            // console.log("State saved. Undo stack size:", undoStack.length);
+        }
+
 
         function deleteZone() {
             if (selectedZoneIndex === -1) return;
+            saveStateForUndo();
             playlistData.items[selectedIndex].zones.splice(selectedZoneIndex, 1);
             selectedZoneIndex = -1;
             document.getElementById('zone-editor').style.display = 'none';
             renderPreview();
+        }
+
+        function undo() {
+            if (undoStack.length > 1) { // Garder au moins un état (l'état initial)
+                redoStack.push(JSON.parse(JSON.stringify(playlistData)));
+                playlistData = undoStack.pop();
+
+                // Ajuster selectedIndex et selectedZoneIndex après undo
+                if (selectedIndex !== -1 && selectedIndex >= playlistData.items.length) {
+                    selectedIndex = playlistData.items.length > 0 ? playlistData.items.length - 1 : -1;
+                }
+                if (selectedIndex !== -1 && selectedZoneIndex !== -1 && selectedIndex < playlistData.items.length && selectedZoneIndex >= playlistData.items[selectedIndex].zones.length) {
+                    selectedZoneIndex = playlistData.items[selectedIndex].zones.length > 0 ? playlistData.items[selectedIndex].zones.length - 1 : -1;
+                }
+                if (selectedIndex === -1) {
+                    document.getElementById('page-editor').style.display = 'none';
+                    document.getElementById('zone-editor').style.display = 'none';
+                } else if (selectedZoneIndex === -1) {
+                    document.getElementById('zone-editor').style.display = 'none';
+                } else {
+                    selectZone(selectedZoneIndex); // Re-populate zone editor if a zone is still selected
+                }
+                renderTimeline();
+                renderPreview();
+            }
+        }
+
+        function redo() {
+            if (redoStack.length > 0) {
+                undoStack.push(JSON.parse(JSON.stringify(playlistData)));
+                playlistData = redoStack.pop();
+
+                if (selectedIndex !== -1 && selectedIndex >= playlistData.items.length) {
+                    selectedIndex = playlistData.items.length > 0 ? playlistData.items.length - 1 : -1;
+                }
+                if (selectedIndex !== -1 && selectedZoneIndex !== -1 && selectedIndex < playlistData.items.length && selectedZoneIndex >= playlistData.items[selectedIndex].zones.length) {
+                    selectedZoneIndex = playlistData.items[selectedIndex].zones.length > 0 ? playlistData.items[selectedIndex].zones.length - 1 : -1;
+                }
+                renderTimeline();
+                renderPreview();
+            }
         }
 
         function previewPlaylist() {
@@ -893,6 +1017,19 @@
                 } else if (selectedIndex !== -1) {
                     deleteCurrentItem();
                 }
+            }
+        });
+
+        // Gestion des raccourcis clavier pour Undo/Redo
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') { // Ctrl+Z ou Cmd+Z
+                e.preventDefault();
+                undo();
+            } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { // Ctrl+Y, Cmd+Y, ou Ctrl+Shift+Z, Cmd+Shift+Z
+                e.preventDefault();
+                redo();
             }
         });
 

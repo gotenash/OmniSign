@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { margin: 0; background: black; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; }
+        #player-screen {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: black; /* Fallback background */
+        }
+        #player-screen .bg-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+        #player-screen .zone {
+            position: absolute;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2;
+        }
+        #player-screen .zone img,
+        #player-screen .zone video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* Garde l'aspect ratio, s'adapte à la zone */
+        }
+        #player-screen .zone iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        #player-screen .zone .clock-content {
+            width: 100%;
+            height: 100%;
+            display: flex; justify-content: center; align-items: center;
+        }
+        #player-screen .zone .text-content {
+            color: white;
+            font-family: sans-serif;
+            font-size: 3vw; /* Taille de police responsive */
+            text-align: center;
+            padding: 1%;
+            word-wrap: break-word;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center; /* Centrage vertical par défaut */
+            justify-content: center; /* Centrage horizontal par défaut */
+        }
+    </style>
+</head>
+<body>
+    <div id="player-screen">
+        <div id="loader" style="color: white; font-family: sans-serif; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">Connexion au serveur...</div>
+        <img id="global-background" class="bg-layer" src="" style="display:none;">
+        <div id="current-page-zones">
+            <!-- Les zones seront chargées dynamiquement ici -->
+        </div>
+    </div>
+
+    <script>
+        let currentIndex = 0;
+        let playlistData = { items: [] };
+        let isPlaying = false;
+        let playTimeout = null;
+        let activeClockIntervals = []; // Pour stocker les intervalles des horloges
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const previewId = urlParams.get('id');
+        const apiKey = urlParams.get('apiKey');
+
+        async function refreshPlaylist() {
+            try {
+                if (previewId && apiKey) {
+                    // Mode Prévisualisation : on interroge l'API du serveur
+                    const res = await fetch('/api/admin/data', { headers: { 'x-api-key': apiKey } });
+                    const data = await res.json();
+                    playlistData = data.playlists[previewId];
+                } else {
+                    // Mode Player : on charge le JSON local généré par le sync-engine
+                    const res = await fetch('./playlist.json?nocache=' + Date.now());
+                    // Sur file://, le status est 0, ce qui n'est pas "ok" pour fetch, on l'autorise donc explicitement
+                    if (!res.ok && res.status !== 0) throw new Error("Fichier playlist.json introuvable");
+                    playlistData = await res.json();
+                }
+
+                if (playlistData && playlistData.items.length > 0 && !isPlaying) {
+                    isPlaying = true;
+                    document.getElementById('loader').style.display = 'none';
+                    playNext();
+                } else if (playlistData && playlistData.items.length > 0 && isPlaying) {
+                    // Si la playlist est déjà en cours, on s'assure que la page actuelle est à jour
+                    // et on ne relance pas playNext pour éviter les boucles multiples.
+                    // On peut forcer un re-rendu de la page actuelle si nécessaire.
+                    // Pour l'instant, on laisse playNext gérer le cycle.
+                }
+            } catch (e) { 
+                document.getElementById('loader').innerText = "Attente de playlist... (" + e.message + ")";
+                setTimeout(refreshPlaylist, 2000); 
+            }
+        }
+
+        function playNext() {
+            // On nettoie le timeout précédent pour éviter les boucles multiples
+            if (playTimeout) clearTimeout(playTimeout);
+
+            const page = playlistData.items[currentIndex];
+            const globalBgElement = document.getElementById('global-background');
+            const pageZonesContainer = document.getElementById('current-page-zones');
+
+            // Nettoyer les intervalles d'horloge de la page précédente
+            activeClockIntervals.forEach(clearInterval);
+            activeClockIntervals = [];
+
+
+            // Appliquer la couleur de fond (Page > Globale)
+            const bgColor = page.backgroundColor || playlistData.backgroundColor || 'black';
+            document.getElementById('player-screen').style.backgroundColor = bgColor;
+
+            // Définir le fond global
+            const bgGlobal = playlistData.localBackgroundUrl || playlistData.backgroundUrl;
+            if (bgGlobal) {
+                const auth = (previewId && apiKey) ? `?apiKey=${apiKey}` : '';
+                globalBgElement.src = bgGlobal.startsWith('/media') ? `${bgGlobal}${auth}` : bgGlobal;
+                globalBgElement.style.display = 'block';
+            } else {
+                globalBgElement.style.display = 'none';
+            }
+
+            // Effacer les zones précédentes
+            pageZonesContainer.innerHTML = '';
+
+            // Rendre les zones pour la page actuelle
+            if (page.zones && page.zones.length > 0) {
+                page.zones.forEach(zone => {
+                    const zoneElement = document.createElement('div');
+                    zoneElement.className = 'zone';
+                    zoneElement.style.left = zone.x + '%';
+                    zoneElement.style.top = zone.y + '%';
+                    zoneElement.style.width = zone.w + '%';
+                    zoneElement.style.height = zone.h + '%';
+
+                    // Appliquer un fond spécifique à la zone si disponible
+                    const zoneBg = zone.localBackgroundUrl || zone.backgroundUrl || page.localBackgroundUrl || page.backgroundUrl;
+                    const auth = (previewId && apiKey) ? `?apiKey=${apiKey}` : '';
+
+                    if (zoneBg) {
+                        const finalBg = zoneBg.startsWith('/media') ? `${zoneBg}${auth}` : zoneBg;
+                        zoneElement.style.backgroundImage = `url(${finalBg})`;
+                        zoneElement.style.backgroundSize = 'cover';
+                        zoneElement.style.backgroundPosition = 'center';
+                    }
+
+                    const mediaUrl = zone.localUrl || zone.url;
+                    if (zone.type === 'image') {
+                        zoneElement.innerHTML = `<img src="${mediaUrl.startsWith('/media') ? mediaUrl + auth : mediaUrl}">`;
+                    } else if (zone.type === 'video') {
+                        const videoElement = document.createElement('video');
+                        videoElement.src = mediaUrl.startsWith('/media') ? mediaUrl + auth : mediaUrl;
+                        videoElement.autoplay = true;
+                        videoElement.muted = true;
+                        videoElement.loop = true;
+                        zoneElement.appendChild(videoElement);
+                    } else if (zone.type === 'web') {
+                        zoneElement.innerHTML = `<iframe src="${mediaUrl.startsWith('/media') ? mediaUrl + auth : mediaUrl}"></iframe>`;
+                    } else if (zone.type === 'text') {
+                        zoneElement.innerHTML = `<div class="text-content">${zone.text || ''}</div>`;
+                        const textContentDiv = zoneElement.querySelector('.text-content');
+                        textContentDiv.style.fontFamily = zone.fontFamily || 'sans-serif';
+                        textContentDiv.style.fontSize = (zone.fontSize || 24) + 'px';
+                        textContentDiv.style.color = zone.color || 'white';
+                        textContentDiv.style.textAlign = zone.textAlign || 'center';
+                        // Ajuster la justification pour le flexbox
+                        textContentDiv.style.justifyContent = zone.textAlign === 'justify' ? 'flex-start' : zone.textAlign;
+                    } else if (zone.type === 'clock') {
+                        zoneElement.innerHTML = `<div class="clock-content"></div>`;
+                        const clockContent = zoneElement.querySelector('.clock-content');
+                        clockContent.style.fontFamily = zone.fontFamily || 'sans-serif';
+                        clockContent.style.fontSize = (zone.fontSize || 24) + 'px';
+                        clockContent.style.color = zone.color || 'white';
+                        
+                        const updateTime = () => {
+                            clockContent.innerText = formatClock(new Date(), zone.clockFormat || 'HH:mm:ss');
+                        };
+                        updateTime();
+                        activeClockIntervals.push(setInterval(updateTime, 1000));
+                    }
+                    pageZonesContainer.appendChild(zoneElement);
+                });
+            }
+
+            currentIndex = (currentIndex + 1) % playlistData.items.length;
+            playTimeout = setTimeout(playNext, page.duration);
+        }
+
+        function formatClock(date, format) {
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+            const year = date.getFullYear();
+
+            return format
+                .replace(/HH/g, hours)
+                .replace(/mm/g, minutes)
+                .replace(/ss/g, seconds)
+                .replace(/DD/g, day)
+                .replace(/MM/g, month)
+                .replace(/YYYY/g, year);
+        }
+
+        // On vérifie les mises à jour du fichier JSON toutes les 30s
+        setInterval(refreshPlaylist, 30000);
+        refreshPlaylist();
+    </script>
+</body>
+</html>

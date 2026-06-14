@@ -220,7 +220,7 @@
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'x-api-key': targetApiKey
+                        'X-API-KEY': targetApiKey
                     },
                     body: JSON.stringify({
                         deviceId: playlistData.deviceId || urlParams.get('deviceId') || 'unknown',

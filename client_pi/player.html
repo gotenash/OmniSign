@@ -2,7 +2,12 @@
 <html>
 <head>
     <style>
-        body { margin: 0; background: black; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; }
+        /* Reset de base */
+        body, html { margin: 0; padding: 0; background: black; overflow: hidden; height: 100vh; width: 100vw; cursor: none !important; }
+        
+        /* On cache le curseur sur TOUS les éléments sans casser leur taille */
+        * { cursor: none !important; }
+
         #player-screen {
             position: relative;
             width: 100%;
@@ -135,7 +140,19 @@
             const logEl = document.getElementById('debug-log');
             if (logEl) {
                 logEl.innerText = msg;
-                logEl.style.display = playlistData.disableDebugLogs ? 'none' : 'block';
+                // On affiche toujours si c'est une erreur, sinon on respecte le réglage
+                if (isError) {
+                    logEl.style.display = 'block';
+                    logEl.style.color = '#e74c3c'; // Rouge pour l'erreur
+                } else {
+                    // Sécurité si playlistData n'est pas encore défini ou si c'est la playlist vide par défaut
+                    const hide = playlistData && playlistData.disableDebugLogs === true;
+                    logEl.style.display = hide ? 'none' : 'block';
+                    logEl.style.color = '#2ecc71'; // Vert normal
+                }
+            }
+            if (msg.includes("Démarrage") || msg.includes("Page suivante") || msg.includes("lecture") || msg.includes("chargée")) {
+                document.getElementById('loader').style.display = 'none';
             }
             if (isError) document.getElementById('status-extra').innerText = msg;
         }
@@ -147,6 +164,7 @@
         let isPlaying = false;
         let playTimeout = null;
         let activeClockIntervals = []; // Pour stocker les intervalles des horloges
+        let currentPlaylistId = null;
 
         const urlParams = new URLSearchParams(window.location.search);
         const serverUrlParam = urlParams.get('serverUrl');
@@ -154,69 +172,85 @@
         const apiKey = urlParams.get('apiKey');
         
         // Détection de l'URL du serveur
-        const serverUrl = serverUrlParam || (window.location.hostname === "" ? "http://localhost:3000" : window.location.origin);
+        let serverUrl = serverUrlParam || (window.location.hostname === "" ? "http://localhost:3000" : window.location.origin);
+        if (serverUrl.endsWith('/')) serverUrl = serverUrl.slice(0, -1); // Nettoyage slash final
 
-        // Chargement dynamique de Socket.io pour éviter les blocages si l'URL est fausse
-        const script = document.createElement('script');
-        script.src = `${serverUrl}/socket.io/socket.io.js`;
-        document.head.appendChild(script);
+        function loadSocketIO(baseUrl) {
+            if (document.getElementById('socket-io-script')) return;
+            const script = document.createElement('script');
+            script.id = 'socket-io-script';
+            script.src = `${baseUrl}/socket.io/socket.io.js`;
+            script.async = true;
+            script.onload = () => {
+                log("Script Socket.io chargé.");
+                if (typeof io === 'undefined') return log("Erreur: io non défini", true);
+                if (playlistData && playlistData.deviceId) initSocketWithId(playlistData.deviceId);
+            };
+            document.head.appendChild(script);
+        }
 
-        // Initialisation Socket pour les séquences et alertes
         let socket = null;
-        script.onload = () => {
-            if (!previewId) {
-            log(`Tentative de connexion au CMS : ${serverUrl}`);
-                 // On prépare une fonction d'initialisation qui sera appelée une fois l'ID connu
-                window.initSocketWithId = (dId) => {
-                    if (socket) return;
-                    socket = io(serverUrl, { 
-                        auth: { token: apiKey || 'ma_cle_secrete_123' },
-                        query: { deviceId: dId },
-                        reconnectionAttempts: 5
-                    }); 
-
-                    socket.on('connect', () => {
-                        log("Socket.io connecté au serveur.");
-                    });
-                    socket.on('disconnect', (reason) => {
-                        log(`Socket.io déconnecté : ${reason}`, true);
-                    });
-                    socket.on('connect_error', (error) => {
-                        log(`Erreur de connexion Socket.io : ${error.message}`, true);
-                    });
-                    log("Socket.io initialisé pour l'écran : " + dId);
-                    
-                    setupSocketListeners();
-                };
-
-                // Si les données sont déjà là (cas rare au premier boot)
-                if (playlistData && playlistData.deviceId) window.initSocketWithId(playlistData.deviceId);
-            }
+        function initSocketWithId(dId) {
+            if (socket || typeof io === 'undefined') return;
+            const finalServerUrl = playlistData.serverUrl || serverUrl;
+            const targetKey = playlistData.apiKey || apiKey || 'ma_cle_secrete_123';
+            
+            socket = io(finalServerUrl, { 
+                auth: { token: targetKey },
+                query: { deviceId: dId },
+                reconnectionAttempts: 5
+            }); 
+            socket.on('connect', () => log("Socket.io connecté."));
+            setupSocketListeners();
         };
-        script.onerror = () => log("Erreur: Impossible de charger Socket.io depuis le serveur", true);
 
         async function refreshPlaylist() {
             try {
                 let newData = null;
                 if (previewId && apiKey) {
-                    const res = await fetch('/api/admin/data', { headers: { 'x-api-key': apiKey } });
+                    const res = await fetch(`${serverUrl}/api/admin/data`, { headers: { 'X-API-KEY': apiKey } });
                     const data = await res.json();
                     newData = data.playlists[previewId];
                 } else {
                     log("Chargement de la playlist locale...");
                     // Suppression du nocache pour le protocole file:// (évite les erreurs de fichier non trouvé)
                     const url = window.location.protocol === 'file:' ? 'playlist.json' : 'playlist.json?nocache=' + Date.now();
-                    const res = await fetch(url);
+                    let res;
+                    try {
+                        res = await fetch(url);
+                    } catch (e) {
+                        res = { ok: false, status: 0 };
+                    }
+
+                    // Si le fichier n'existe pas encore (404), on affiche un message d'attente propre
+                    if (res.status === 404 || (window.location.protocol === 'file:' && !res.ok)) {
+                        log("Fichier playlist absent, attente...");
+                        document.getElementById('loader').innerHTML = "En attente d'approbation sur le CMS...<br><small>Veuillez approuver cet écran dans l'administration.</small>";
+                        return setTimeout(refreshPlaylist, 10000);
+                    }
+
                     if (!res.ok && res.status !== 0) throw new Error(`HTTP ${res.status}`);
                     newData = await res.json();
                     log("Playlist locale chargée.");
-                    
-                    // On initialise le socket avec l'ID trouvé dans le manifest local
-                    if (window.initSocketWithId) window.initSocketWithId(newData.deviceId || 'unknown');
                 }
 
                 if (newData && newData.items && newData.items.length > 0) {
-                    playlistData = newData; // On met à jour les données pour le prochain cycle
+                    const isNewPlaylist = newData.id !== currentPlaylistId;
+                    playlistData = newData;
+                    currentPlaylistId = newData.id;
+                    
+                    // On récupère l'IP du serveur depuis le fichier si elle n'est pas en paramètre
+                    if (!previewId) loadSocketIO(playlistData.serverUrl || serverUrl);
+                    document.getElementById('debug-log').style.display = 'none';
+
+                    // Si la playlist a changé d'ID, on force le redémarrage pour éviter les erreurs d'index
+                    if (isNewPlaylist && isPlaying) {
+                        log("Mise à jour de la playlist détectée.");
+                        currentIndex = 0;
+                        playNext();
+                        return;
+                    }
+                    
                     const splashScreenElement = document.getElementById('splash-screen');
                     const loaderElement = document.getElementById('loader');
                     const authParam = (previewId && apiKey) ? `?apiKey=${apiKey}` : '';
@@ -233,6 +267,7 @@
                         }
                         splashScreenElement.style.display = 'block';
                         loaderElement.style.display = 'none';
+                        document.getElementById('debug-log').style.display = 'none';
                         log("Affichage du splashscreen.");
                         // Le playNext sera appelé après la durée du splashscreen si nécessaire, ou directement
                         // Pour l'instant, on démarre la playlist après un court délai pour laisser le splashscreen s'afficher
@@ -249,7 +284,14 @@
                         log("Données mises à jour.");
                     }
                 } else {
-                    log("Playlist vide, attente de contenu...", true);
+                    // Si on a des données mais pas d'items, c'est l'état "en attente" ou une playlist vide
+                    if (newData && (newData.status === 'waiting_approval' || newData.items?.length === 0)) {
+                        log("Afficheur non configuré.");
+                        document.getElementById('loader').innerHTML = "En attente d'approbation ou de contenu...<br><small>ID de l'appareil : <b>" + (newData.deviceId || 'Inconnu') + "</b></small>";
+                    } else {
+                        log("Playlist vide ou invalide.", true);
+                    }
+                    setTimeout(refreshPlaylist, 10000);
                 }
             } catch (e) { 
                 log("Erreur : " + e.message, true);
@@ -260,10 +302,18 @@
         function playNext() {
             // On nettoie le timeout précédent pour éviter les boucles multiples
             if (playTimeout) clearTimeout(playTimeout);
+            // Sécurité : si la playlist est vide ou l'index invalide (changement de playlist)
+            if (!playlistData.items || playlistData.items.length === 0) return;
+            if (currentIndex >= playlistData.items.length) currentIndex = 0;
 
             // Cacher le splashscreen si visible
             const splashScreenElement = document.getElementById('splash-screen');
             if (splashScreenElement) splashScreenElement.style.display = 'none';
+
+            // Sécurité : si l'index est hors limites (playlist raccourcie), on revient au début
+            if (!playlistData.items[currentIndex]) {
+                currentIndex = 0;
+            }
 
             const page = playlistData.items[currentIndex];
             const globalBgElement = document.getElementById('global-background');
@@ -277,11 +327,13 @@
                 const targetServerUrl = playlistData.serverUrl || serverUrl;
                 const targetApiKey = playlistData.apiKey || apiKey || 'ma_cle_secrete_123';
 
+                log(`Envoi stats vers ${targetServerUrl}...`);
+
                 fetch(targetServerUrl + '/api/player/log', {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'x-api-key': targetApiKey
+                        'X-API-KEY': targetApiKey
                     },
                     body: JSON.stringify({
                         deviceId: playlistData.deviceId || 'unknown',
@@ -290,8 +342,11 @@
                         duration: page.duration
                     })
                 })
-                .then(res => { if(!res.ok) throw new Error(res.status); })
-                .catch(err => log("Erreur stats: " + err.message));
+                .then(res => { 
+                    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+                    // console.log("Stats envoyées avec succès");
+                })
+                .catch(err => log("Erreur stats: " + err.message, true));
             }
 
             // Nettoyer les intervalles d'horloge de la page précédente
@@ -334,27 +389,31 @@
 
                     // Appliquer un fond spécifique à la zone si disponible
                     const zoneBg = zone.localBackgroundUrl || zone.backgroundUrl || page.localBackgroundUrl || page.backgroundUrl;
-                    const auth = (previewId && apiKey) ? `?apiKey=${apiKey}` : '';
+                    const authQuery = (previewId && apiKey) ? `?apiKey=${apiKey}` : '';
 
                     if (zoneBg) {
-                        const finalBg = zoneBg.startsWith('/media') ? `${zoneBg}${auth}` : zoneBg;
+                        const finalBg = zoneBg.startsWith('/media') ? `${zoneBg}${authQuery}` : zoneBg;
                         zoneElement.style.backgroundImage = `url(${finalBg})`;
                         zoneElement.style.backgroundSize = 'cover';
                         zoneElement.style.backgroundPosition = 'center';
                     }
 
-                    const mediaUrl = zone.localUrl || zone.url;
+                    // On utilise le chemin local si disponible, sinon le chemin distant avec l'URL du serveur
+                    let mediaUrl = zone.localUrl || zone.url || "";
+                    const token = apiKey || (playlistData && playlistData.apiKey);
+                    if (mediaUrl.startsWith('/media')) mediaUrl = `${serverUrl}${mediaUrl}${token ? '?apiKey=' + token : ''}`;
+
                     if (zone.type === 'image') {
-                        zoneElement.innerHTML = `<img src="${mediaUrl.startsWith('/media') ? mediaUrl + auth : mediaUrl}">`;
+                        zoneElement.innerHTML = `<img src="${mediaUrl}">`;
                     } else if (zone.type === 'video') {
                         const videoElement = document.createElement('video');
-                        videoElement.src = mediaUrl.startsWith('/media') ? mediaUrl + auth : mediaUrl;
+                        videoElement.src = mediaUrl;
                         videoElement.autoplay = true;
                         videoElement.muted = true;
                         videoElement.loop = true;
                         zoneElement.appendChild(videoElement);
                     } else if (zone.type === 'web') {
-                        zoneElement.innerHTML = `<iframe src="${mediaUrl.startsWith('/media') ? mediaUrl + auth : mediaUrl}"></iframe>`;
+                        zoneElement.innerHTML = `<iframe src="${mediaUrl}"></iframe>`;
                     } else if (zone.type === 'text') {
                         const content = zone.isMarquee ? 
                             `<div class="marquee-container"><div class="marquee-content text-content">${zone.text || ''}</div></div>` :
@@ -466,6 +525,11 @@
             socket.on('clear-alert', (id) => {
                 const el = document.getElementById(`alert-${id}`);
                 if (el) el.remove();
+            });
+            // Ajout de l'écoute des mises à jour de playlist pour une transition immédiate
+            socket.on('playlist-updated', (data) => {
+                log("Mise à jour immédiate reçue via Socket.");
+                refreshPlaylist();
             });
         }
 

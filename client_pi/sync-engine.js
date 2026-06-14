@@ -12,15 +12,33 @@ const execPromise = util.promisify(exec);
 const originalLog = console.log;
 console.log = (...args) => originalLog(`[${new Date().toLocaleString()}]`, ...args);
 
-const SERVER_URL = process.env.PIDYN_SERVER_URL || 'http://localhost:3000';
-const API_KEY = process.env.PIDYN_API_KEY || 'ma_cle_secrete_123';
-const DEVICE_ID = process.env.PIDYN_DEVICE_ID || 'default-pi-device';
+const SERVER_URL = (process.env.PIDYN_SERVER_URL && process.env.PIDYN_SERVER_URL !== "undefined") ? process.env.PIDYN_SERVER_URL : 'http://localhost:3000';
+const API_KEY = (process.env.PIDYN_API_KEY && process.env.PIDYN_API_KEY !== "undefined") ? process.env.PIDYN_API_KEY : 'ma_cle_secrete_123';
+const DEVICE_ID = (process.env.PIDYN_DEVICE_ID && process.env.PIDYN_DEVICE_ID !== "undefined") ? process.env.PIDYN_DEVICE_ID : 'default-pi-device';
 
 const LOCAL_MEDIA_DIR = path.join(__dirname, 'media');
 const LOCAL_MANIFEST = path.join(__dirname, 'playlist.json');
 
-console.log(` Serveur : ${SERVER_URL}`);
-console.log(`🆔 Device ID : ${DEVICE_ID}`);
+console.log(`--- Démarrage PiDyn Sync (Node ${process.version}) ---`);
+console.log(`📡 Serveur cible : ${SERVER_URL}`);
+console.log(`🆔 ID Afficheur  : ${DEVICE_ID}`);
+
+// Initialisation du fichier manifest pour que le player sache qu'il est en attente
+async function ensureInitialManifest() {
+    const exists = await fs.pathExists(LOCAL_MANIFEST);
+    if (!exists) {
+        const initialData = {
+            id: 'waiting',
+            deviceId: DEVICE_ID,
+            serverUrl: SERVER_URL,
+            items: [],
+            status: 'waiting_approval'
+        };
+        await fs.writeJson(LOCAL_MANIFEST, initialData);
+        console.log("📄 Manifest de sécurité créé.");
+    }
+}
+ensureInitialManifest();
 
 if (SERVER_URL.includes('localhost')) {
     console.warn('⚠️  Attention : Le client pointe sur "localhost".');
@@ -32,9 +50,9 @@ const socket = io(SERVER_URL, {
     query: { deviceId: DEVICE_ID },
     reconnection: true,
     reconnectionAttempts: Infinity,
-    reconnectionDelay: 5000,
-    reconnectionDelayMax: 30000,
-    timeout: 10000
+    reconnectionDelay: 2000,
+    reconnectionDelayMax: 10000,
+    timeout: 20000
 });
 
 async function getNetworkInfo() {
@@ -67,7 +85,7 @@ async function syncPlaylist(playlistData) {
         return console.warn('⚠️ Playlist reçue vide ou invalide.');
     }
     console.log('🔄 Synchronisation en cours...');
-    await fs.ensureDir(LOCAL_MEDIA_DIR);
+    await fs.ensureDir(LOCAL_MEDIA_DIR, { mode: 0o755 });
 
     // Identifier tous les fichiers uniques à traiter pour le calcul de progression
     const allUrls = [];
@@ -111,6 +129,7 @@ async function syncPlaylist(playlistData) {
                     writer.on('finish', resolve);
                     writer.on('error', reject);
                 });
+                await fs.chmod(localPath, 0o644);
             } catch (error) {
                 console.error(`❌ Échec du téléchargement de ${relativePath}:`, error.message);
                 return url; // Retourne l'URL distante en cas d'échec pour tenter une lecture directe
@@ -156,8 +175,9 @@ async function syncPlaylist(playlistData) {
             const stats = await fs.stat(fullPath);
             if (stats.isDirectory()) continue;
 
-            // Transformer le chemin local en URL relative style serveur pour comparer
-            const relativeUrl = '/media/' + path.relative(LOCAL_MEDIA_DIR, fullPath).split(path.sep).join('/');
+            // Transformer le chemin local en URL relative style serveur (gère /img/ et /media/)
+            const relPath = path.relative(LOCAL_MEDIA_DIR, fullPath).split(path.sep).join('/');
+            const relativeUrl = relPath.startsWith('img/') ? '/' + relPath : '/media/' + relPath;
             
             if (!uniqueUrls.includes(relativeUrl)) {
                 console.log(`🗑️ Nettoyage : suppression du fichier inutilisé ${file}`);
@@ -171,9 +191,11 @@ async function syncPlaylist(playlistData) {
     // Injection des paramètres de communication pour le player.html
     playlistData.deviceId = DEVICE_ID;
     playlistData.serverUrl = SERVER_URL;
+    playlistData.apiKey = API_KEY;
 
     // On écrit le fichier que le HTML va lire
     await fs.writeJson(LOCAL_MANIFEST, playlistData);
+    await fs.chmod(LOCAL_MANIFEST, 0o644);
     socket.emit('player-status-update', { downloading: false });
     console.log('✅ Playlist locale à jour.');
 }
@@ -182,9 +204,21 @@ socket.on('connect', async () => {
     console.log(`Connecté au CMS en tant que ${DEVICE_ID}`);
     // Envoyer les infos réseau au serveur
     const network = await getNetworkInfo();
+    const totalMem = Math.round(os.totalmem() / 1024 / 1024);
+    const freeMem = Math.round(os.freemem() / 1024 / 1024);
+    console.log(`📊 Mémoire système : ${freeMem}MB libres / ${totalMem}MB au total`);
     socket.emit('player-info-update', network);
 });
-socket.on('connect_error', (err) => console.error(`❌ Erreur de connexion au CMS :`, err.message));
+
+// Surveillance périodique de la RAM (toutes les minutes)
+setInterval(() => {
+    const free = Math.round(os.freemem() / 1024 / 1024);
+    if (free < 150) {
+        console.warn(`⚠️ Alerte RAM basse : seulement ${free}MB restants !`);
+    }
+}, 60000);
+
+socket.on('connect_error', (err) => console.error(`❌ Erreur de connexion au CMS (${SERVER_URL}) :`, err.message));
 socket.on('disconnect', () => console.log('🔌 Déconnecté du serveur.'));
 
 socket.on('playlist-updated', async (playlistData) => {

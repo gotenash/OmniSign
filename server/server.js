@@ -23,7 +23,23 @@ console.error = (...args) => originalError(`[${new Date().toLocaleString()}]`, .
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
+
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-API-KEY, Authorization");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    // Réponse immédiate pour les requêtes de pré-vérification (Preflight)
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(200);
+    }
+    next();
+});
 
 let JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_very_secret_and_long'; // À changer en production !
 let API_KEY = process.env.PIDYN_API_KEY || 'ma_cle_secrete_123';
@@ -71,6 +87,7 @@ async function initializeDatabase() {
                 table.string('username').unique().notNullable();
                 table.string('password').notNullable();
                 table.string('role').notNullable(); // admin, editor, author
+                table.string('email').unique();
             });
             console.log('Table "users" created.');
             // Insert default users
@@ -81,6 +98,14 @@ async function initializeDatabase() {
             })));
             await db('users').insert(usersToInsert);
             console.log('Default users inserted.');
+        }
+        // Migration : Ajout de la colonne email si elle n'existe pas
+        const hasEmail = await db.schema.hasColumn('users', 'email');
+        if (!hasEmail) {
+            await db.schema.table('users', (table) => {
+                table.string('email').unique();
+            });
+            console.log('Colonne "email" ajoutée à la table "users".');
         }
     });
 
@@ -361,6 +386,10 @@ const authMiddleware = (req, res, next) => {
     if (apiKey === API_KEY) { // Check against the loaded API_KEY
         req.user = { role: 'admin' }; // Les écrans (Pi) sont authentifiés via clef
         return next();
+    }
+
+    if (req.path === '/api/player/log') {
+        console.log(`[AUTH] Rejet log stats de ${req.ip}. Clé reçue: "${apiKey}", Attendue: "${API_KEY}"`);
     }
 
     // Authentification pour les utilisateurs admin (JWT)
@@ -669,7 +698,7 @@ app.delete('/api/admin/media/:id', authMiddleware, checkRole(['admin', 'editor']
 
 // API Admin : Gestion des utilisateurs
 app.get('/api/admin/users', authMiddleware, checkRole(['admin']), (req, res) => {
-    db('users').select('id', 'username', 'role').then(users => res.json(users)).catch(err => res.status(500).send('Error fetching users'));
+    db('users').select('id', 'username', 'role', 'email').then(users => res.json(users)).catch(err => res.status(500).send('Error fetching users'));
 });
 
 // API Admin : Gestion des agendas
@@ -713,15 +742,15 @@ app.delete('/api/admin/schedules/:id', authMiddleware, checkRole(['admin', 'edit
 });
 
 app.post('/api/admin/users', authMiddleware, checkRole(['admin']), async (req, res) => {
-    const { username, password, role } = req.body;
+    const { username, password, role, email } = req.body;
     if (!username || !password || !role) return res.status(400).send('Données manquantes');
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     db('users').where({ username }).first()
         .then(async (existingUser) => {
             if (existingUser) {
-                await db('users').where({ username }).update({ password: hashedPassword, role });
+                await db('users').where({ username }).update({ password: hashedPassword, role, email });
             } else {
-                await db('users').insert({ username, password: hashedPassword, role });
+                await db('users').insert({ username, password: hashedPassword, role, email });
             }
             res.json({ success: true });
         })
@@ -895,6 +924,7 @@ app.post('/api/admin/playlists', authMiddleware, checkRole(['admin', 'editor', '
             } else {
                 await db('playlists').insert(playlistData);
             }
+            checkSchedules(null, true); // Force la mise à jour des écrans utilisant ce diaporama
             res.json({ success: true, playlistId });
         })
         .catch(err => res.status(500).send('Error saving playlist: ' + err.message));
@@ -929,6 +959,7 @@ app.post('/api/admin/settings', authMiddleware, checkRole(['admin']), (req, res)
             DISABLE_CLIENT_LOGS = !!disableClientLogs;
             DISABLE_DEBUG_LOGS = !!disableDebugLogs;
             SPLASH_SCREEN_URL = splashScreenUrl || '/img/splashscreen.png';
+            checkSchedules(null, true); // Force la mise à jour de tous les écrans connectés
             console.log("⚙️ Paramètres système mis à jour via l'interface admin.");
             res.json({ success: true });
         })

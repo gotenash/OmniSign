@@ -13,7 +13,8 @@
         .media-item { display: inline-block; background: #eee; padding: 5px; margin: 5px; border-radius: 4px; font-size: 0.8em; }
         button { padding: 10px 15px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
         button.secondary { background: #6c757d; }
-        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #2c3e50; z-index: 100; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; }
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: url('img/splashscreen.png') no-repeat center center; background-size: cover; z-index: 100; display: flex; align-items: center; justify-content: center; }
+        #login-box { background: #1a252f; padding: 30px; border-radius: 15px; border: 2px solid #3498db; box-shadow: 0 10px 40px rgba(0,0,0,0.7); display: flex; flex-direction: column; align-items: center; gap: 15px; text-align: center; }
         h1, h2 { color: #3498db; }
         .media-thumbnail {
             width: 80px; /* Taille fixe pour les miniatures */
@@ -40,11 +41,19 @@
     <div id="screenshot-gallery" style="position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 2000; max-height: 80vh; overflow-y: auto; pointer-events: none;"></div>
 
     <div id="login-overlay">
-        <img src="img/logo_pidyn.jpg" alt="Logo PiDyn" style="width: 200px; margin-bottom: 10px;">
-        <h2>Connexion PiDyn</h2>
-        <input type="text" id="username" placeholder="Nom d'utilisateur">
-        <input type="password" id="password" placeholder="Mot de passe">
-        <button onclick="login()">Se connecter</button>
+        <div id="login-box">
+            <img src="img/logo_pidyn.jpg" alt="Logo PiDyn" style="width: 200px;">
+            <h2 style="margin: 0;">Connexion PiDyn</h2>
+            <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                <label style="width: 100px; text-align: left;">Utilisateur</label>
+                <input type="text" id="username" placeholder="Nom d'utilisateur" onkeydown="handleLoginKey(event)" style="flex: 1;">
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                <label style="width: 100px; text-align: left;">Mot de passe</label>
+                <input type="password" id="password" placeholder="Mot de passe" onkeydown="handleLoginKey(event)" style="flex: 1;">
+            </div>
+            <button onclick="login()" style="width: 100%;">Se connecter</button>
+        </div>
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -898,6 +907,12 @@
             const input = document.getElementById('set-jwt-secret');
             input.value = retVal;
             input.type = 'text'; // On l'affiche pour que l'utilisateur puisse le voir avant d'enregistrer
+        }
+
+        function handleLoginKey(event) {
+            if (event.key === 'Enter') {
+                login();
+            }
         }
 
         async function saveSettings() {

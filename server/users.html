@@ -29,6 +29,10 @@
                 <input type="text" id="user-name">
             </div>
             <div>
+                <label>Email</label><br>
+                <input type="email" id="user-email" placeholder="exemple@domaine.com">
+            </div>
+            <div>
                 <label>Mot de passe</label><br>
                 <input type="password" id="user-pass">
             </div>
@@ -65,13 +69,14 @@
             if (res.status === 403) window.location.href = '/';
             const users = await res.json();
 
-            let html = '<table><tr><th>Utilisateur</th><th>Rôle</th><th>Actions</th></tr>';
+            let html = '<table><tr><th>Utilisateur</th><th>Email</th><th>Rôle</th><th>Actions</th></tr>';
             users.forEach(u => {
                 html += `<tr>
                     <td>${u.username}</td>
+                    <td>${u.email || '<em style="color:#bdc3c7">Non renseigné</em>'}</td>
                     <td>${u.role}</td>
                     <td> 
-                        <button class="secondary" title="Modifier" onclick="editUser('${u.username}', '${u.role}')">✏️</button>
+                        <button class="secondary" title="Modifier" onclick="editUser('${u.username}', '${u.role}', '${u.email || ''}')">✏️</button>
                         ${u.username !== 'admin' ? `<button class="danger" title="Supprimer" onclick="deleteUser('${u.username}')">🗑️</button>` : ''}
                     </td>
                 </tr>`;
@@ -79,14 +84,16 @@
             document.getElementById('users-list').innerHTML = html + '</table>';
         }
 
-        function editUser(username, role) {
+        function editUser(username, role, email) {
             document.getElementById('user-name').value = username;
             document.getElementById('user-role').value = role;
+            document.getElementById('user-email').value = email;
             document.getElementById('user-pass').value = ''; 
         }
 
         async function saveUser() {
             const username = document.getElementById('user-name').value;
+            const email = document.getElementById('user-email').value;
             const password = document.getElementById('user-pass').value;
             const role = document.getElementById('user-role').value;
 
@@ -95,12 +102,13 @@
             const res = await fetch('/api/admin/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ username, password, role })
+                body: JSON.stringify({ username, email, password, role })
             });
 
             if (res.ok) {
                 alert('Utilisateur enregistré !');
                 document.getElementById('user-name').value = '';
+                document.getElementById('user-email').value = '';
                 document.getElementById('user-pass').value = '';
                 loadUsers();
             } else {

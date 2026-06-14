@@ -1,0 +1,3 @@
+DEVICE_ID=votre-identifiant-unique-d-appareil
+SERVER_URL=http://votre-ip-serveur:3000
+API_KEY=ma_cle_secrete_123
