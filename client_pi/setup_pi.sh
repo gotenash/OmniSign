@@ -63,7 +63,7 @@ fi
 
 # Installer Chromium, X11 et les dépendances système
 sudo apt-get install -y --no-install-recommends xserver-xorg x11-xserver-utils xinit lightdm openbox chromium-browser unclutter wireless-tools scrot python3-xdg \
-    fonts-noto fonts-liberation fonts-roboto || sudo apt-get install -y --no-install-recommends chromium xserver-xorg x11-xserver-utils xinit lightdm openbox unclutter wireless-tools scrot python3-xdg fonts-noto fonts-liberation fonts-roboto || error_exit "Échec de l'installation."
+    fonts-noto fonts-noto-color-emoji fonts-liberation fonts-roboto || sudo apt-get install -y --no-install-recommends chromium xserver-xorg x11-xserver-utils xinit lightdm openbox unclutter wireless-tools scrot python3-xdg fonts-noto fonts-noto-color-emoji fonts-liberation fonts-roboto || error_exit "Échec de l'installation."
 
 # 1. Augmenter le SWAP à 1024Mo (Crucial pour éviter l'Error 4 sur Pi Lite)
 log_message "Augmentation de la taille du SWAP à 1024Mo..."

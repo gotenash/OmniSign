@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PiDyn - Gestion Cantine</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #2c3e50; color: white; }
+        section { background: #1a252f; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .day-box { background: #34495e; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: grid; grid-template-columns: 100px 1fr 1fr 1fr; gap: 10px; align-items: center; }
+        input { padding: 8px; border-radius: 4px; border: 1px solid #1a252f; background: #2c3e50; color: white; width: 100%; box-sizing: border-box; }
+        button { padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button.secondary { background: #6c757d; }
+        h1, h2 { color: #3498db; }
+        label { font-size: 12px; color: #bdc3c7; }
+    </style>
+</head>
+<body>
+    <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1>PiDyn - Menu de la Semaine</h1>
+        <button class="secondary" onclick="logout()">Déconnexion</button>
+    </header>
+
+    <nav id="main-nav" style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <!-- Rempli par JS selon le rôle -->
+    </nav>
+
+    <section>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div>
+                <label>Semaine de l'année</label><br>
+                <input type="week" id="week-selector" onchange="loadMenu()">
+            </div>
+            <button onclick="saveMenu()" style="background: #27ae60;">💾 Enregistrer le menu</button>
+        </div>
+
+        <div id="days-container">
+            <!-- Généré par JS -->
+        </div>
+    </section>
+
+    <script>
+        const token = localStorage.getItem('pidyn_token');
+        const role = localStorage.getItem('pidyn_role');
+        if (!token) window.location.href = '/';
+
+        const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+        const fields = ['starter', 'main', 'dessert'];
+
+        function init() {
+            // Navigation dynamique
+            const nav = document.getElementById('main-nav');
+            let html = `<button class="secondary" onclick="window.location.href='/'">📊 Accueil</button>`;
+            if (role !== 'cook') {
+                html += `<button class="secondary" onclick="window.location.href='/ecrans'">🖥 Écrans</button>`;
+                html += `<button class="secondary" onclick="window.location.href='/diaporamas'">🎞 Diaporamas</button>`;
+            }
+            html += `<button onclick="window.location.href='/canteen'">🍴 Cantine</button>`;
+            if (role !== 'cook') {
+                html += `<button class="secondary" onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>`;
+            }
+            if (role === 'admin') {
+                html += `<button class="secondary" onclick="window.location.href='/users'">👥 Utilisateurs</button>`;
+                html += `<button class="secondary" onclick="window.location.href='/systeme'">⚙️ Système</button>`;
+            }
+            nav.innerHTML = html;
+
+            // Sélecteur de semaine par défaut (courante)
+            const now = new Date();
+            const dayNum = now.getUTCDay() || 7;
+            now.setUTCDate(now.getUTCDate() + 4 - dayNum);
+            const year = now.getUTCFullYear();
+            const onejan = new Date(Date.UTC(year,0,1));
+            const week = Math.ceil((((now - onejan) / 86400000) + 1) / 7);
+            document.getElementById('week-selector').value = `${year}-W${week.toString().padStart(2,'0')}`;
+
+            // Créer les champs
+            const container = document.getElementById('days-container');
+            days.forEach(day => {
+                const div = document.createElement('div');
+                div.className = 'day-box';
+                div.innerHTML = `<strong>${day}</strong>
+                    <div><label>Entrée</label><input type="text" data-day="${day}" data-field="starter"></div>
+                    <div><label>Plat</label><input type="text" data-day="${day}" data-field="main"></div>
+                    <div><label>Dessert</label><input type="text" data-day="${day}" data-field="dessert"></div>`;
+                container.appendChild(div);
+            });
+            loadMenu();
+        }
+
+        async function loadMenu() {
+            const weekId = document.getElementById('week-selector').value.replace('-W', '-');
+            const res = await fetch(`/api/admin/canteen/${weekId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            
+            document.querySelectorAll('input[data-day]').forEach(input => {
+                const d = input.dataset.day;
+                const f = input.dataset.field;
+                input.value = (data && data[d]) ? data[d][f] : '';
+            });
+        }
+
+        async function saveMenu() {
+            const weekId = document.getElementById('week-selector').value.replace('-W', '-');
+            const menuData = {};
+            days.forEach(day => {
+                menuData[day] = {};
+                fields.forEach(f => {
+                    menuData[day][f] = document.querySelector(`input[data-day="${day}"][data-field="${f}"]`).value;
+                });
+            });
+
+            const res = await fetch('/api/admin/canteen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ weekId, data: menuData })
+            });
+            if (res.ok) alert('Menu enregistré avec succès !');
+        }
+
+        function logout() { localStorage.removeItem('pidyn_token'); localStorage.removeItem('pidyn_role'); window.location.href = '/'; }
+        init();
+    </script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <style>
         body { margin: 0; background: black; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; }
         #player-screen {
@@ -98,11 +99,29 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.5);
             margin-bottom: 5px;
             animation: slideDown 0.5s ease-out;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
         }
         .flash-info { background: rgba(52, 152, 219, 0.9); }
         .flash-warning { background: rgba(243, 156, 18, 0.9); }
         .flash-danger { background: rgba(231, 76, 60, 0.9); }
         @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+
+        /* Templates Styles */
+        .tpl-container { width: 100%; height: 100%; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; }
+        .tpl-header { font-size: 5vw; margin-bottom: 4vh; border-bottom: 3px solid #3498db; padding-bottom: 10px; font-weight: bold; }
+        .tpl-content { display: flex; flex-direction: column; gap: 2vh; width: 80%; }
+        .tpl-row { background: rgba(255,255,255,0.1); padding: 2vh; border-radius: 15px; display: flex; align-items: center; }
+        .tpl-label { color: #3498db; font-size: 2vw; width: 30%; text-align: left; font-weight: bold; }
+        .tpl-value { font-size: 3vw; width: 70%; text-align: right; }
+        
+        .tpl-meeting-room { font-size: 8vw; font-weight: bold; margin-bottom: 2vh; }
+        .tpl-meeting-status { font-size: 4vw; padding: 2vh 5vw; border-radius: 100px; margin-top: 4vh; }
+        .status-disponible { background: #27ae60; }
+        .status-occupée { background: #e74c3c; }
 
         /* Splashscreen / Loader */
         #loader {
@@ -253,6 +272,31 @@
             // Effacer les zones précédentes
             pageZonesContainer.innerHTML = '';
 
+            // Rendu des modèles
+            if (page.template) {
+                const tpl = document.createElement('div');
+                tpl.className = 'tpl-container anim-fade-in';
+                
+                if (page.template === 'canteen') {
+                    tpl.innerHTML = `
+                        <div class="tpl-header">${page.data.title || 'MENU'}</div>
+                        <div class="tpl-content">
+                            <div class="tpl-row"><div class="tpl-label">ENTRÉE</div><div class="tpl-value">${page.data.starter}</div></div>
+                            <div class="tpl-row"><div class="tpl-label">PLAT</div><div class="tpl-value">${page.data.main}</div></div>
+                            <div class="tpl-row"><div class="tpl-label">DESSERT</div><div class="tpl-value">${page.data.dessert}</div></div>
+                        </div>
+                    `;
+                } else if (page.template === 'meeting') {
+                    const statusClass = (page.data.status || '').toLowerCase();
+                    tpl.innerHTML = `
+                        <div class="tpl-meeting-room">${page.data.room}</div>
+                        <div style="font-size: 3vw; opacity: 0.8;">${page.data.subject || ''}</div>
+                        <div class="tpl-meeting-status status-${statusClass}">${page.data.status}</div>
+                    `;
+                }
+                pageZonesContainer.appendChild(tpl);
+            }
+
             // Rendre les zones pour la page actuelle
             if (page.zones && page.zones.length > 0) {
                 page.zones.forEach(zone => {
@@ -388,6 +432,12 @@
             }
         }
 
+        function getAlertIcon(type) {
+            if (type === 'danger') return '🚨';
+            if (type === 'warning') return '⚠️';
+            return 'ℹ️';
+        }
+
         if (socket) {
             socket.on('show-alert', (alert) => {
                 const overlay = document.getElementById('alert-overlay');
@@ -395,7 +445,14 @@
                 const div = document.createElement('div');
                 div.id = `alert-${alert.id}`;
                 div.className = `flash-message flash-${alert.type}`;
-                div.innerText = alert.text;
+                
+                // Structure identique pour la prévisualisation
+                div.innerHTML = `
+                    <span style="flex-shrink: 0;">${getAlertIcon(alert.type)}</span>
+                    <div class="marquee-container" style="flex: 1;">
+                        <div class="marquee-content">${alert.text}</div>
+                    </div>
+                `;
                 overlay.appendChild(div);
             });
             socket.on('clear-alert', (id) => {

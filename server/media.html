@@ -9,6 +9,8 @@
         .filters { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
         .filters label { font-size: 14px; }
         .filters select, .filters input { padding: 8px; border-radius: 4px; border: 1px solid #34495e; background: #34495e; color: white; }
+        button { padding: 10px 15px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button.secondary { background: #6c757d; }
         .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; }
         .media-item { background: #34495e; border-radius: 8px; overflow: hidden; text-align: center; padding: 10px; position: relative; }
         .media-item img, .media-item video { max-width: 100%; height: 100px; object-fit: contain; display: block; margin: 0 auto 10px auto; }
@@ -17,15 +19,23 @@
         .media-item .delete-btn { position: absolute; top: 5px; right: 5px; background: #e74c3c; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; }
         .upload-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid #34495e; }
         .upload-section input[type="file"] { margin-right: 10px; }
-        .upload-section button { padding: 8px 15px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <header>
-        <a href="/" style="color: #bdc3c7; text-decoration: none;">&larr; Retour</a>
-        <h2>Médiathèque</h2>
-        <div></div>
+    <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 10px 20px; background: #1a252f;">
+        <h1 style="color: #3498db; margin: 0;">PiDyn - Médiathèque</h1>
+        <button class="secondary" onclick="logout()">Déconnexion</button>
     </header>
+
+    <nav style="margin: 0 20px 20px 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="secondary" onclick="window.location.href='/'">📊 Accueil</button>
+        <button class="secondary" onclick="window.location.href='/ecrans'">🖥 Écrans</button>
+        <button class="secondary" onclick="window.location.href='/diaporamas'">🎞 Diaporamas</button>
+        <button class="secondary" onclick="window.location.href='/canteen'">🍴 Cantine</button>
+        <button onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>
+        <button class="secondary" onclick="window.location.href='/users'">👥 Utilisateurs</button>
+        <button class="secondary" onclick="window.location.href='/systeme'">⚙️ Système</button>
+    </nav>
 
     <div class="container">
         <div class="filters">
@@ -75,6 +85,8 @@
         const token = localStorage.getItem('pidyn_token');
         if (!token) window.location.href = '/';
         const PREVIEW_AUTH = '?apiKey=ma_cle_secrete_123';
+
+        function logout() { localStorage.removeItem('pidyn_token'); localStorage.removeItem('pidyn_role'); window.location.href = '/'; }
 
         let allMedia = [];
         let allUsers = [];

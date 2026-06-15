@@ -7,6 +7,7 @@ const os = require('os');
 const util = require('util');
 
 const execPromise = util.promisify(exec);
+const isWin = os.platform() === 'win32';
 
 // Ajout de l'horodatage aux logs du client
 const originalLog = console.log;
@@ -14,12 +15,12 @@ console.log = (...args) => originalLog(`[${new Date().toLocaleString()}]`, ...ar
 
 const SERVER_URL = (process.env.PIDYN_SERVER_URL && process.env.PIDYN_SERVER_URL !== "undefined") ? process.env.PIDYN_SERVER_URL : 'http://localhost:3000';
 const API_KEY = (process.env.PIDYN_API_KEY && process.env.PIDYN_API_KEY !== "undefined") ? process.env.PIDYN_API_KEY : 'ma_cle_secrete_123';
-const DEVICE_ID = (process.env.PIDYN_DEVICE_ID && process.env.PIDYN_DEVICE_ID !== "undefined") ? process.env.PIDYN_DEVICE_ID : 'default-pi-device';
+const DEVICE_ID = (process.env.PIDYN_DEVICE_ID && process.env.PIDYN_DEVICE_ID !== "undefined") ? process.env.PIDYN_DEVICE_ID : 'pc-stick-device';
 
 const LOCAL_MEDIA_DIR = path.join(__dirname, 'media');
 const LOCAL_MANIFEST = path.join(__dirname, 'playlist.json');
 
-console.log(`--- Démarrage PiDyn Sync (Node ${process.version}) ---`);
+console.log(`--- Démarrage PiDyn Sync Windows (Node ${process.version}) ---`);
 console.log(`📡 Serveur cible : ${SERVER_URL}`);
 console.log(`🆔 ID Afficheur  : ${DEVICE_ID}`);
 
@@ -40,11 +41,6 @@ async function ensureInitialManifest() {
 }
 ensureInitialManifest();
 
-if (SERVER_URL.includes('localhost')) {
-    console.warn('⚠️  Attention : Le client pointe sur "localhost".');
-    console.warn('    Si votre serveur est sur une autre machine, modifiez PIDYN_SERVER_URL.');
-}
-
 const socket = io(SERVER_URL, {
     auth: { token: API_KEY },
     query: { deviceId: DEVICE_ID },
@@ -61,7 +57,6 @@ async function getNetworkInfo() {
     
     for (const name of Object.keys(interfaces)) {
         for (const iface of interfaces[name]) {
-            // On cherche l'IPv4 qui n'est pas interne (localhost)
             if ((iface.family === 'IPv4' || iface.family === 4) && !iface.internal) {
                 info.ip = iface.address;
                 info.mac = iface.mac;
@@ -70,12 +65,13 @@ async function getNetworkInfo() {
     }
 
     try {
-        // Récupération SSID et Qualité du signal via les outils wireless
-        const { stdout: ssid } = await execPromise("iwgetid -r || echo ''");
-        const { stdout: quality } = await execPromise("iwconfig 2>&1 | grep 'Link Quality' | head -n 1 | awk '{print $2}' | cut -d'=' -f2 || echo ''");
-        if (ssid.trim()) info.ssid = ssid.trim();
-        if (quality.trim()) info.signal = quality.trim();
-    } catch (e) { /* Pas de WiFi ou interface wlan0 absente */ }
+        // Sur Windows, on utilise netsh pour récupérer les infos WiFi
+        const { stdout } = await execPromise('netsh wlan show interfaces');
+        const ssidMatch = stdout.match(/ SSID\s+:\s+(.*)/);
+        const signalMatch = stdout.match(/ Signal\s+:\s+(.*)/);
+        if (ssidMatch) info.ssid = ssidMatch[1].trim();
+        if (signalMatch) info.signal = signalMatch[1].trim();
+    } catch (e) { /* Pas de WiFi ou erreur netsh */ }
 
     return info;
 }
@@ -87,7 +83,6 @@ async function syncPlaylist(playlistData) {
     console.log('🔄 Synchronisation en cours...');
     await fs.ensureDir(LOCAL_MEDIA_DIR, { mode: 0o755 });
 
-    // Identifier tous les fichiers uniques à traiter pour le calcul de progression
     const allUrls = [];
     if (playlistData.backgroundUrl) allUrls.push(playlistData.backgroundUrl);
     if (playlistData.splashScreenUrl) allUrls.push(playlistData.splashScreenUrl);
@@ -101,17 +96,15 @@ async function syncPlaylist(playlistData) {
     const uniqueUrls = [...new Set(allUrls.filter(u => !!u))];
     let processedCount = 0;
 
-    // Fonction utilitaire pour télécharger un média
     const downloadMedia = async (url) => {
         if (!url) return null;
-        // Préserver la structure des dossiers (pour Sozi)
         let relativePath;
         if (url.startsWith('/media/')) {
             relativePath = url.substring('/media/'.length);
         } else if (url.startsWith('/img/')) {
             relativePath = 'img/' + url.substring('/img/'.length);
         } else {
-            relativePath = path.basename(url); // Fallback for other URLs
+            relativePath = path.basename(url);
         }
         const localPath = path.join(LOCAL_MEDIA_DIR, relativePath);
         if (!(await fs.pathExists(localPath))) {
@@ -132,7 +125,7 @@ async function syncPlaylist(playlistData) {
                 await fs.chmod(localPath, 0o644);
             } catch (error) {
                 console.error(`❌ Échec du téléchargement de ${relativePath}:`, error.message);
-                return url; // Retourne l'URL distante en cas d'échec pour tenter une lecture directe
+                return url;
             } 
         }
         processedCount++;
@@ -140,24 +133,15 @@ async function syncPlaylist(playlistData) {
             downloading: true, 
             progress: Math.round((processedCount / uniqueUrls.length) * 100) 
         });
-        return `./media/${relativePath.replace(/\\/g, '/')}`; // Ensure forward slashes for HTML src
+        // Force l'usage des slashes pour le HTML même sur Windows
+        return `./media/${relativePath.split(path.sep).join('/')}`;
     };
 
-    // Synchro du fond d'écran global
-    if (playlistData.backgroundUrl) {
-        playlistData.localBackgroundUrl = await downloadMedia(playlistData.backgroundUrl);
-    }
+    if (playlistData.backgroundUrl) playlistData.localBackgroundUrl = await downloadMedia(playlistData.backgroundUrl);
+    if (playlistData.splashScreenUrl) playlistData.localSplashScreenUrl = await downloadMedia(playlistData.splashScreenUrl);
 
-    // Synchro du splashscreen
-    if (playlistData.splashScreenUrl) {
-        playlistData.localSplashScreenUrl = await downloadMedia(playlistData.splashScreenUrl);
-    }
-
-    // Synchro des items
     for (const item of playlistData.items) {
         if (item.backgroundUrl) item.localBackgroundUrl = await downloadMedia(item.backgroundUrl);
-        
-        // On synchronise les médias de chaque zone
         if (item.zones) {
             for (const zone of item.zones) {
                 if (zone.url) zone.localUrl = await downloadMedia(zone.url);
@@ -166,8 +150,6 @@ async function syncPlaylist(playlistData) {
         }
     }
 
-    // --- FONCTION DE NETTOYAGE ---
-    // Supprimer les fichiers locaux qui ne sont plus dans la playlist actuelle
     try {
         const allLocalFiles = await fs.readdir(LOCAL_MEDIA_DIR, { recursive: true });
         for (const file of allLocalFiles) {
@@ -175,7 +157,6 @@ async function syncPlaylist(playlistData) {
             const stats = await fs.stat(fullPath);
             if (stats.isDirectory()) continue;
 
-            // Transformer le chemin local en URL relative style serveur (gère /img/ et /media/)
             const relPath = path.relative(LOCAL_MEDIA_DIR, fullPath).split(path.sep).join('/');
             const relativeUrl = relPath.startsWith('img/') ? '/' + relPath : '/media/' + relPath;
             
@@ -188,12 +169,10 @@ async function syncPlaylist(playlistData) {
         console.error('⚠️ Erreur lors du nettoyage du cache :', err.message);
     }
 
-    // Injection des paramètres de communication pour le player.html
     playlistData.deviceId = DEVICE_ID;
     playlistData.serverUrl = SERVER_URL;
     playlistData.apiKey = API_KEY;
 
-    // On écrit le fichier que le HTML va lire
     await fs.writeJson(LOCAL_MANIFEST, playlistData);
     await fs.chmod(LOCAL_MANIFEST, 0o644);
     socket.emit('player-status-update', { downloading: false });
@@ -202,7 +181,6 @@ async function syncPlaylist(playlistData) {
 
 socket.on('connect', async () => {
     console.log(`Connecté au CMS en tant que ${DEVICE_ID}`);
-    // Envoyer les infos réseau au serveur
     const network = await getNetworkInfo();
     const totalMem = Math.round(os.totalmem() / 1024 / 1024);
     const freeMem = Math.round(os.freemem() / 1024 / 1024);
@@ -210,89 +188,40 @@ socket.on('connect', async () => {
     socket.emit('player-info-update', network);
 });
 
-// Surveillance périodique de la RAM (toutes les minutes)
-setInterval(() => {
-    const free = Math.round(os.freemem() / 1024 / 1024);
-    if (free < 150) {
-        console.warn(`⚠️ Alerte RAM basse : seulement ${free}MB restants !`);
-    }
-}, 60000);
-
-socket.on('connect_error', (err) => console.error(`❌ Erreur de connexion au CMS (${SERVER_URL}) :`, err.message));
-socket.on('disconnect', () => console.log('🔌 Déconnecté du serveur.'));
-
 socket.on('playlist-updated', async (playlistData) => {
     await syncPlaylist(playlistData);
-
-    // Si la playlist fait partie d'une séquence, on prépare le client à demander la suivante
-    if (playlistData.sequenceContext) {
-        const { sequenceId, currentPlaylistIndex, playlistIds } = playlistData.sequenceContext;
-        // Pour l'instant, on ne fait rien de plus ici. Le client player.html devra gérer la fin de la playlist
-        // et émettre 'request-next-playlist-in-sequence' via Socket.IO.
-        // Cette logique sera implémentée dans player.html ou un script dédié à la lecture.
-        console.log(`ℹ️ Playlist reçue fait partie de la séquence ${sequenceId}, index ${currentPlaylistIndex}/${playlistIds.length - 1}`);
-    }
 });
 
-// Le client player.html devra émettre cet événement quand une playlist de séquence est terminée
-// socket.emit('request-next-playlist-in-sequence', { deviceId: DEVICE_ID, sequenceId: '...', currentPlaylistIndex: ... });
-
-
-// Écouter les commandes de contrôle de l'écran
 socket.on('screen-command', (data) => {
     const state = data.action === 'on' ? 'on' : 'off';
     console.log(`📺 Commande écran reçue : force ${state}`);
-    // On force l'export de DISPLAY pour que xset sache quel écran piloter
-    exec(`export DISPLAY=:0 && xset dpms force ${state}`, (error) => {
-        if (error) console.error(`❌ Erreur lors de l'exécution de xset : ${error.message}`);
-    });
+    
+    const lparam = data.action === 'on' ? -1 : 2;
+    const cmd = `powershell -command "(Add-Type '[DllImport(\"user32.dll\")] public class Win32 { [DllImport(\"user32.dll\")] public static extern int SendMessage(int hWnd, int hMsg, int wParam, int lParam); }' -PassThru)::SendMessage(0xffff, 0x0112, 0xf170, ${lparam})"`;
+    exec(cmd);
 });
 
-// Écouter les demandes de capture d'écran
 socket.on('request-screenshot', () => {
-    const screenshotPath = '/tmp/screenshot.jpg';
+    const screenshotPath = path.join(os.tmpdir(), 'screenshot.jpg');
     console.log(`📸 Prise d'une capture d'écran...`);
-    exec(`export DISPLAY=:0 && scrot ${screenshotPath}`, async (error, stdout, stderr) => {
+    const psCommand = `powershell -command "[Reflection.Assembly]::LoadWithPartialName('System.Drawing'); [Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); $screen = [System.Windows.Forms.Screen]::PrimaryScreen; $bitmap = New-Object System.Drawing.Bitmap $screen.Bounds.Width, $screen.Bounds.Height; $graphics = [System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($screen.Bounds.X, $screen.Bounds.Y, 0, 0, $bitmap.Size); $bitmap.Save('${screenshotPath.replace(/\\/g, '\\\\')}', [System.Drawing.Imaging.ImageFormat]::Jpeg); $graphics.Dispose(); $bitmap.Dispose();"`;
+    exec(psCommand, async (error, stdout, stderr) => {
         if (error) {
-            console.error(`❌ Erreur scrot : ${error.message}`);
-            if (stderr) console.error(`❌ scrot stderr: ${stderr}`);
+            console.error(`❌ Erreur capture Windows : ${error.message}`);
+            if (stderr) console.error(`❌ PowerShell stderr: ${stderr}`);
             return;
         }
-        if (stdout) console.log(`✅ scrot stdout: ${stdout}`);
+        if (stdout) console.log(`✅ PowerShell stdout: ${stdout}`);
         const image = await fs.readFile(screenshotPath, { encoding: 'base64' });
         socket.emit('screenshot-taken', { deviceId: DEVICE_ID, image: `data:image/jpeg;base64,${image}` });
         await fs.remove(screenshotPath);
     });
 });
 
-// Écouter les commandes de nettoyage du cache
-socket.on('clear-local-cache', async () => {
-    console.log(`🧹 Commande de nettoyage du cache reçue.`);
-    try {
-        await fs.emptyDir(LOCAL_MEDIA_DIR);
-        if (await fs.pathExists(LOCAL_MANIFEST)) {
-            await fs.remove(LOCAL_MANIFEST);
-        }
-        console.log('✅ Cache local nettoyé. En attente de la prochaine synchro...');
-        // Le serveur renverra la playlist car le fichier local a disparu ou lors de la prochaine vérification
-    } catch (error) {
-        console.error(`❌ Erreur lors du nettoyage du cache : ${error.message}`);
-    }
-});
-
-// Écouter les commandes de redémarrage du service
 socket.on('restart-service', () => {
-    console.log(`🔄 Commande de redémarrage du service reçue.`);
-    exec('sudo systemctl restart pidyn-sync.service', (error, stdout, stderr) => {
-        if (error) console.error(`❌ Erreur d'exécution : ${error.message}`);
-    });
+    console.log(`🔄 Commande de redémarrage reçue. Arrêt du processus pour redémarrage par le gestionnaire Windows.`);
+    process.exit(0);
 });
 
-// Gestion des erreurs globales pour éviter le crash du service
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Rejet de promesse non géré :', reason);
-});
-
-process.on('uncaughtException', (err) => {
-    console.error('❌ Exception non capturée :', err);
-});
+process.on('unhandledRejection', (reason) => console.error('❌ Rejet non géré :', reason));
+process.on('uncaughtException', (err) => console.error('❌ Exception non capturée :', err));

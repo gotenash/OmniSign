@@ -16,10 +16,20 @@
     </style>
 </head>
 <body>
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h1>Gestion des Utilisateurs</h1>
-        <button class="secondary" onclick="window.location.href='/'">Retour Admin</button>
-    </div>
+    <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1>PiDyn - Gestion des Utilisateurs</h1>
+        <button class="secondary" onclick="logout()">Déconnexion</button>
+    </header>
+
+    <nav style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="secondary" onclick="window.location.href='/'">📊 Accueil</button>
+        <button class="secondary" onclick="window.location.href='/ecrans'">🖥 Écrans</button>
+        <button class="secondary" onclick="window.location.href='/diaporamas'">🎞 Diaporamas</button>
+        <button class="secondary" onclick="window.location.href='/canteen'">🍴 Cantine</button>
+        <button class="secondary" onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>
+        <button onclick="window.location.href='/users'">👥 Utilisateurs</button>
+        <button class="secondary" onclick="window.location.href='/systeme'">⚙️ Système</button>
+    </nav>
 
     <section>
         <h2>Ajouter / Modifier un Utilisateur</h2>
@@ -61,6 +71,8 @@
             alert("Accès réservé aux administrateurs");
             window.location.href = '/';
         }
+
+        function logout() { localStorage.removeItem('pidyn_token'); localStorage.removeItem('pidyn_role'); window.location.href = '/'; }
 
         async function loadUsers() {
             const res = await fetch('/api/admin/users', { //

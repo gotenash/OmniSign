@@ -1,38 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PiDyn Admin</title>
+    <title>PiDyn - Tableau de Bord</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #2c3e50; color: white; }
         section { background: #1a252f; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); margin-bottom: 20px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #34495e; }
         th, td { padding: 10px; border: 1px solid #1a252f; text-align: left; }
         th { background: #3498db; color: white; }
-        .item-row { display: flex; gap: 10px; margin-bottom: 10px; }
         input, select { padding: 8px; border: 1px solid #34495e; border-radius: 4px; background: #34495e; color: white; }
-        .media-item { display: inline-block; background: #eee; padding: 5px; margin: 5px; border-radius: 4px; font-size: 0.8em; }
         button { padding: 10px 15px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
         button.secondary { background: #6c757d; }
+        button.danger { background: #e74c3c; }
         #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: url('img/splashscreen.png') no-repeat center center; background-size: cover; z-index: 100; display: flex; align-items: center; justify-content: center; }
         #login-box { background: #1a252f; padding: 30px; border-radius: 15px; border: 2px solid #3498db; box-shadow: 0 10px 40px rgba(0,0,0,0.7); display: flex; flex-direction: column; align-items: center; gap: 15px; text-align: center; }
         h1, h2 { color: #3498db; }
-        .media-thumbnail {
-            width: 80px; /* Taille fixe pour les miniatures */
-            height: 60px;
-            object-fit: contain; /* Garde le ratio et s'adapte */
-            vertical-align: middle;
-            margin-right: 5px;
-            border: 1px solid #ccc;
-        }
-        .status-dot {
-            height: 10px;
-            width: 10px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 8px;
-        }
-        .online { background-color: #2ecc71; }
-        .offline { background-color: #e74c3c; }
     </style>
 </head>
 <script src="/socket.io/socket.io.js"></script>
@@ -44,119 +26,41 @@
         <div id="login-box">
             <img src="img/logo_pidyn.jpg" alt="Logo PiDyn" style="width: 200px;">
             <h2 style="margin: 0;">Connexion PiDyn</h2>
-            <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
-                <label style="width: 100px; text-align: left;">Utilisateur</label>
-                <input type="text" id="username" placeholder="Nom d'utilisateur" onkeydown="handleLoginKey(event)" style="flex: 1;">
-            </div>
-            <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
-                <label style="width: 100px; text-align: left;">Mot de passe</label>
-                <input type="password" id="password" placeholder="Mot de passe" onkeydown="handleLoginKey(event)" style="flex: 1;">
-            </div>
-            <button onclick="login()" style="width: 100%;">Se connecter</button>
+            <input type="text" id="username" placeholder="Utilisateur" onkeydown="handleLoginKey(event)">
+            <input type="password" id="password" placeholder="Mot de passe" onkeydown="handleLoginKey(event)">
+            <button onclick="login()">Connexion</button>
         </div>
     </div>
 
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h1>Gestionnaire d'Affichage Dynamique</h1>
-        <div>
-            <button id="media-btn" style="display: none; background: #28a745;" onclick="window.location.href='/mediatheque'">Médiathèque</button>
-            <button id="users-admin-btn" style="display: none; background: #6f42c1;" onclick="window.location.href='/users'">Gestion Utilisateurs</button>
-            <button class="secondary" onclick="logout()">Déconnexion</button>
-        </div>
-    </div>
+    <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1>PiDyn - Statistiques de Diffusion</h1>
+        <button class="secondary" onclick="logout()">Déconnexion</button>
+    </header>
 
-    <section id="players-section" style="display: none;">
-        <h2>Écrans Connectés</h2>
-        <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
-            <label for="filter-group">Filtrer par groupe :</label>
-            <select id="filter-group" onchange="filterPlayers()">
-                <option value="">Tous les groupes</option>
-                <!-- Options de groupe seront chargées ici -->
-            </select>
-            <button class="secondary" onclick="load()">Actualiser</button>
-        </div>
-        <div id="players-list"></div>
-    </section>
-
-    <section>
-        <h2>Mes Diaporamas</h2>
-        <div style="display:flex; gap:10px; margin-bottom:15px;">
-            <button onclick="window.location.href='/editor'">+ Créer un nouveau diaporama</button>
-            <button class="secondary" onclick="document.getElementById('pptx-input').click()">Import PowerPoint (Beta)</button>
-            <input type="file" id="pptx-input" style="display:none" accept=".pptx" onchange="importPPTX(this)">
-        </div>
-        <div id="playlists-list" style="margin-top: 15px;"></div>
-    </section>
-
-    <section>
-        <h2>Mes Séquences de Diaporamas</h2>
-        <div style="background:#1a252f; padding:15px; border-radius:8px; margin-bottom:15px;">
-            <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <input type="text" id="seq-name" placeholder="Nom de la séquence" style="flex:1">
-                <button onclick="saveSequence()">Enregistrer la séquence</button>
-            </div>
-            <div id="seq-builder" style="display:flex; flex-wrap:wrap; gap:5px; padding:10px; border:1px dashed #3498db; min-height:40px;">
-                <em style="color:#bdc3c7">Cliquez sur les diaporamas ci-dessous pour les ajouter à la séquence...</em>
-            </div>
-        </div>
-        <div id="sequences-list"></div>
-    </section>
-
-    <section id="group-assign-section" style="display: none;">
-        <h2>Assigner un diaporama/séquence à un groupe</h2>
-        <div style="background:#1a252f; padding:15px; border-radius:8px; margin-bottom:15px;">
-            <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
-                <label for="assign-group-select">Groupe :</label>
-                <select id="assign-group-select" style="flex:1">
-                    <option value="">Sélectionner un groupe</option>
-                </select>
-                <label for="assign-playlist-select">Diaporama/Séquence :</label>
-                <select id="assign-playlist-select" style="flex:2">
-                    <option value="">Sélectionner une cible</option>
-                </select>
-                <button onclick="assignPlaylistToGroup()" style="background:#28a745">Assigner au groupe</button>
-            </div>
-            <p style="font-size: 12px; color: #bdc3c7;">
-                Assignera le diaporama ou la séquence sélectionnée à tous les écrans du groupe choisi.
-            </p>
-        </div>
-    </section>
-
-    <section id="groups-section" style="display: none;">
-        <h2>Groupes d'Écrans (Lieux, Zones...)</h2>
-        <div style="background:#1a252f; padding:15px; border-radius:8px; margin-bottom:15px;">
-            <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <input type="text" id="group-name" placeholder="Nom du groupe (ex: Accueil, Cantine...)" style="flex:1">
-                <button onclick="saveGroup()">+ Créer le groupe</button>
-            </div>
-            <p style="font-size: 12px; color: #bdc3c7;">Les groupes vous permettent d'organiser vos écrans par emplacement physique.</p>
-        </div>
-        <div id="groups-list"></div>
-    </section>
-
-    <section>
-        <h2>Messages Flash / Alertes</h2>
-        <div style="background:#1a252f; padding:15px; border-radius:8px; margin-bottom:15px;">
-            <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <input type="text" id="alert-text" placeholder="Message à diffuser..." style="flex:3">
-                <select id="alert-type" style="flex:1">
-                    <option value="info">Information (Bleu)</option>
-                    <option value="warning">Attention (Orange)</option>
-                    <option value="danger">Urgence (Rouge)</option>
-                </select>
-                <select id="alert-target" style="flex:1">
-                    <option value="">Tous les écrans</option>
-                </select>
-                <button onclick="sendAlert()" style="background:#28a745">Diffuser</button>
-            </div>
-        </div>
-        <div id="alerts-list"></div>
-    </section>
+    <nav style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <button onclick="window.location.href='/'">📊 Accueil</button>
+        <button class="secondary" onclick="window.location.href='/ecrans'">🖥 Écrans</button>
+        <button class="secondary" onclick="window.location.href='/diaporamas'">🎞 Diaporamas</button>
+        <button class="secondary" onclick="window.location.href='/canteen'">🍴 Cantine</button>
+        <button class="secondary" onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>
+        <button class="secondary" onclick="window.location.href='/users'">👥 Utilisateurs</button>
+        <button class="secondary" onclick="window.location.href='/systeme'">⚙️ Système</button>
+    </nav>
 
     <section id="analytics-section" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h2>Statistiques de Diffusion (Top 50)</h2>
             <button class="danger" onclick="resetAnalytics()">Réinitialiser les stats</button>
+        </div>
+        <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+            <div style="background: #34495e; padding: 15px; border-radius: 8px; flex: 1; text-align: center;">
+                <h3>Écrans en ligne</h3>
+                <p id="online-screens-count" style="font-size: 2.5em; font-weight: bold; color: #2ecc71;">0</p>
+            </div>
+            <div style="background: #34495e; padding: 15px; border-radius: 8px; flex: 1; text-align: center;">
+                <h3>Écrans hors ligne</h3>
+                <p id="offline-screens-count" style="font-size: 2.5em; font-weight: bold; color: #e74c3c;">0</p>
+            </div>
         </div>
         <div style="background: #1a252f; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
             <canvas id="analytics-chart" style="width: 100%; max-height: 250px;"></canvas>
@@ -166,77 +70,16 @@
         </div>
     </section>
 
-    <section id="settings-section" style="display: none;">
-        <h2>Paramètres Système</h2>
-        <div style="background:#1a252f; padding:15px; border-radius:8px;">
-            <div style="margin-bottom: 15px;">
-                <label>JWT Secret (Sécurité des sessions)</label>
-                <div style="display: flex; gap: 5px; align-items: center;">
-                    <input type="password" id="set-jwt-secret" placeholder="Secret pour signer les tokens (JWT)" style="flex: 1; margin: 0;">
-                    <button type="button" class="secondary" onclick="generateJWTSecret()" title="Générer un secret aléatoire" style="padding: 8px 12px;">🎲</button>
-                </div>
-            </div>
-            <div style="margin-bottom: 15px;">
-                <label>API Key (Authentification des écrans)</label>
-                <input type="text" id="set-api-key" placeholder="Clé utilisée par les Raspberry Pi">
-            </div>
-            <div style="margin-bottom: 15px;">
-                <label>URL du Splashscreen (Image de chargement)</label>
-                <input type="text" id="set-splash-url" placeholder="Par défaut: /img/splashscreen.png">
-            </div>
-            <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
-                <input type="checkbox" id="set-disable-logs" style="width: auto; margin: 0;">
-                <label for="set-disable-logs" style="cursor: pointer;">Désactiver les logs/analytics sur les players</label>
-            </div>
-            <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
-                <input type="checkbox" id="set-disable-debug" style="width: auto; margin: 0;">
-                <label for="set-disable-debug" style="cursor: pointer;">Désactiver les logs techniques (Debug) sur les players</label>
-            </div>
-            <div style="margin-bottom: 15px; border-top: 1px solid #34495e; padding-top: 15px;">
-                <label>Sauvegarde et Maintenance</label>
-                <div style="margin-top: 10px; display: flex; gap: 10px;">
-                    <button onclick="downloadBackup()" style="background: #27ae60;">📦 Télécharger une sauvegarde</button>
-                    <button onclick="document.getElementById('restore-input').click()" style="background: #e67e22;">📂 Restaurer une sauvegarde</button>
-                    <input type="file" id="restore-input" style="display:none" accept=".zip" onchange="restoreBackup(this)">
-                </div>
-            </div>
-            <button onclick="saveSettings()">Enregistrer les paramètres</button>
-            <p style="color:#e74c3c; font-size:12px; margin-top:10px; line-height: 1.4;">
-                ⚠️ Attention : Modifier le JWT Secret déconnectera immédiatement tous les utilisateurs.<br>
-                Modifier l'API Key interrompra la synchronisation des écrans jusqu'à ce qu'ils soient reconfigurés.
-            </p>
-        </div>
-    </section>
-
-    <section id="schedules-section" style="display: none;">
-        <h2>Agenda des Diaporamas</h2>
-        <div style="display: flex; gap: 10px; align-items: end; margin-bottom: 15px;">
-            <input type="hidden" id="schedule-id">
-            <div>
-                <label>Afficheur</label><br>
-                <select id="schedule-device" style="width: 150px;"></select>
-            </div>
-            <div>
-                <label>Diaporama</label><br>
-                <select id="schedule-playlist" style="width: 150px;"></select>
-            </div>
-            <div>
-                <label>Début</label><br>
-                <input type="datetime-local" id="schedule-start">
-            </div>
-            <div>
-                <label>Fin</label><br>
-                <input type="datetime-local" id="schedule-end">
-            </div>
-            <button onclick="saveSchedule()">Enregistrer la planification</button>
-            <button class="secondary" onclick="resetScheduleForm()">Annuler</button>
-        </div>
-        <div id="schedules-list"></div>
-    </section>
-
     <script>
         let token = localStorage.getItem('pidyn_token');
         let role = localStorage.getItem('pidyn_role');
+        let socket = null;
+
+        function handleLoginKey(event) {
+            if (event.key === 'Enter') {
+                login();
+            }
+        }
 
         async function login() {
             const u = document.getElementById('username').value;
@@ -262,203 +105,78 @@
             location.reload();
         }
 
+        function setupSocket() {
+            if (socket) return; // Prevent multiple socket connections
+            socket = io({ auth: { token } });
+            socket.on('admin-player-status', (data) => {
+                // Reload only player counts, not all analytics
+                loadPlayerCounts();
+            });
+            socket.on('admin-analytics-update', () => {
+                // Rafraîchir les graphiques et le tableau en temps réel
+                loadAnalytics();
+            });
+            socket.on('screenshot-taken', (data) => {
+                const gallery = document.getElementById('screenshot-gallery');
+                const card = document.createElement('div');
+                card.style.cssText = "background:#34495e; padding:10px; border-radius:8px; box-shadow:0 5px 15px rgba(0,0,0,0.5); pointer-events:auto; position:relative;";
+                card.innerHTML = `
+                    <button style="position:absolute; top:5px; right:5px; background:#e74c3c; color:white; border:none; border-radius:50%; width:20px; height:20px; cursor:pointer;" onclick="this.parentElement.remove()">×</button>
+                    <div style="font-size:10px; margin-bottom:5px;">${data.deviceId} - ${new Date().toLocaleTimeString()}</div>
+                    <img src="${data.image}" style="max-width:250px; display:block; cursor:pointer;" onclick="window.open(this.src)">
+                `;
+                gallery.prepend(card);
+                setTimeout(() => card.remove(), 60000);
+            });
+        }
+
         function checkAuth() {
             if (token) {
                 document.getElementById('login-overlay').style.display = 'none';
-                // Seuls Admin et Editeur voient la gestion des écrans
-                if (role === 'admin' || role === 'editor') document.getElementById('players-section').style.display = 'block';
-                // Seuls Admin et Editeur voient la gestion des agendas
-                if (role === 'admin' || role === 'editor') document.getElementById('schedules-section').style.display = 'block';
-                // Seuls Admin et Editeur voient la section d'assignation de groupe
-                if (role === 'admin' || role === 'editor') document.getElementById('group-assign-section').style.display = 'block';
-                // Seuls Admin et Editeur voient la gestion des groupes
-                if (role === 'admin' || role === 'editor') document.getElementById('groups-section').style.display = 'block';
-                // Statistiques
-                if (role === 'admin' || role === 'editor') document.getElementById('analytics-section').style.display = 'block';
-                // Accès à la médiathèque pour les rôles autorisés
-                if (role === 'admin' || role === 'editor' || role === 'author') document.getElementById('media-btn').style.display = 'inline-block';
-                // Seul l'admin voit le bouton de gestion des utilisateurs
-                if (role === 'admin') document.getElementById('users-admin-btn').style.display = 'inline-block';
-                load();
-                // Seul l'admin voit la section des paramètres système
-                if (role === 'admin') {
-                    document.getElementById('settings-section').style.display = 'block';
+                
+                // Gestion de la visibilité du menu pour le cuisinier
+                if (role === 'cook') {
+                    document.querySelectorAll('nav button:not([onclick="/"]):not([onclick*="/canteen"])').forEach(b => b.style.display = 'none');
                 }
-                setupSocket(); // Initialise la connexion Socket.io après l'authentification
+
+                if (role === 'admin' || role === 'editor') {
+                    document.getElementById('analytics-section').style.display = 'block';
+                    setupSocket(); // Initialize socket for real-time updates
+                    load();
+                }
             }
         }
 
         async function load() {
             const res = await fetch('/api/admin/data', { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.status === 403) return logout();
-            const { players, playlists, sequences, settings, groups } = await res.json();
-
-            // Afficher la liste des diaporamas
-            const plList = document.getElementById('playlists-list'); 
-            plList.innerHTML = Object.keys(playlists).map(id => `
-                <div class="playlist-card" onclick="addToSequence('${id}', '${playlists[id].name}')" style="background:#34495e; padding:10px; margin-bottom:5px; border-radius:4px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-                    <span><strong>${playlists[id].name}</strong> (${playlists[id].items.length} éléments)</span>
-                    <div style="display:flex; gap:5px;"> 
-                        <button class="secondary" title="Modifier" onclick="event.stopPropagation(); window.location.href='/editor?id=${id}'">✏️</button>
-                        <button style="background:#e74c3c" title="Supprimer" onclick="event.stopPropagation(); deletePlaylist('${id}')">🗑️</button>
-                    </div>
-                </div>
-            `).join('');
-
-            // Afficher la liste des players
-             let html = '<table border="1"><tr><th>Nom</th><th>ID</th><th>Groupe</th><th>Statut</th><th>Playlist</th><th>WiFi</th><th>IP</th><th>Dernière vue</th><th>Action</th></tr>';
-            for (let id in players) {
-                const player = players[id];
-                const playlistName = player.currentPlaylistId ? (playlists[player.currentPlaylistId] ? playlists[player.currentPlaylistId].name : 'Inconnue') : 'Aucune';
-                const lastSeen = player.lastSeen ? new Date(player.lastSeen).toLocaleString() : 'Jamais';
-                // On considère l'écran en ligne s'il a été vu il y a moins d'une minute au chargement initial
-                const isOnline = player.lastSeen && (new Date() - new Date(player.lastSeen) < 60000);
-                player.downloadStatus = player.downloadStatus || {}; // Ensure downloadStatus exists
-                const statusClass = isOnline ? 'online' : 'offline';
-
-                html += `<tr>
-                    <td><span id="status-dot-${id}" class="status-dot ${statusClass}" title="${isOnline ? 'En ligne' : 'Hors ligne'}"></span>${player.name}</td>
-                    <td>${id}</td>
-                    <td>
-                        <select onchange="assignGroup('${id}', this.value)" style="width:100%">
-                            <option value="" ${(!player.groupId) ? 'selected' : ''}>Aucun</option>
-                            ${(groups || []).map(g => `<option value="${g.id}" ${player.groupId == g.id ? 'selected' : ''}>${g.name}</option>`).join('')}
-                        </select>
-                    </td>
-                    <td>${player.status === 'pending' ? 'En attente' : 'Approuvé'}</td>
-                    <td>
-                        ${playlistName}
-                        <span id="dl-status-${id}">
-                            ${player.downloadStatus.downloading ? `<br><small style="color:#f1c40f">⬇️ Synchro: ${player.downloadStatus.progress}%</small>` : ''}
-                        </span>
-                        ${player.status === 'approved' ? `
-                            <select onchange="assign('${id}', this.value)" style="margin-left: 5px;">
-                                <option value="">Manuel: Aucune</option>
-                                <optgroup label="Diaporamas">
-                                    ${Object.keys(playlists).map(pId => `<option value="p:${pId}" ${player.manualPlaylistId === pId ? 'selected' : ''}>${playlists[pId].name}</option>`).join('')}
-                                </optgroup>
-                                <optgroup label="Séquences">
-                                    ${Object.keys(sequences || {}).map(sId => `<option value="s:${sId}" ${player.manualSequenceId === sId ? 'selected' : ''}>${sequences[sId].name}</option>`).join('')}
-                                </optgroup>
-                            </select>` : ''}
-                    </td>
-                    <td style="font-size: 0.8em;">${player.wifiSSID ? `📶 ${player.wifiSSID}<br>(${player.wifiSignal})` : 'Ethernet'}</td>
-                    <td>${player.ip || 'N/A'}</td>
-                    <td>${lastSeen}</td>
-                    <td>`;
-                if (player.status === 'pending') {
-                    html += `<button onclick="approvePlayer('${id}')">Approuver</button>`;
-                }
-                if (player.status === 'approved') {
-                    html += `<button class="secondary" title="Forcer la synchronisation" onclick="forceSync('${id}')">🔄</button>`;
-                    html += `<button class="secondary" title="Redémarrer l'écran" onclick="restartScreen('${id}')">🔌</button>`;
-                    html += `<button class="secondary" title="Nettoyer le cache local" onclick="clearCache('${id}')">🧹</button>`;
-                }
-                html += `<button style="background:#e74c3c" title="Supprimer" onclick="removePlayer('${id}')">🗑️</button>`;
-                html += `</td></tr>`;
-            }
-            document.getElementById('players-list').innerHTML = html + '</table>';
-
-            // Afficher la liste des séquences
-            const seqList = document.getElementById('sequences-list');
-            seqList.innerHTML = Object.keys(sequences || {}).map(id => `
-                <div style="background:#34495e; padding:10px; margin-bottom:5px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
-                    <span><strong>${sequences[id].name}</strong> (${sequences[id].playlistIds.length} diaporamas)</span>
-                    <button style="background:#e74c3c" onclick="deleteSequence('${id}')">🗑️</button>
-                </div>
-            `).join('');
-
-            // Afficher la liste des groupes
-            const grpList = document.getElementById('groups-list');
-            grpList.innerHTML = (groups || []).map(g => `
-                <div style="background:#34495e; padding:10px; margin-bottom:5px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
-                    <span><strong>${g.name}</strong> (${g.id})</span>
-                    <div style="display:flex; gap:5px;">
-                        <button class="secondary" title="Prendre une capture de tous les écrans du groupe" onclick="captureGroup('${g.id}')">📸</button>
-                        <button style="background:#e74c3c" onclick="deleteGroup('${g.id}')">🗑️</button>
-                    </div>
-                </div>
-            `).join('');
-
-            // Charger les sélections pour l'agenda
-            const schedPlaylist = document.getElementById('schedule-playlist');
-            schedPlaylist.innerHTML = '<option value="">Choisir...</option>' + 
-                Object.keys(playlists).map(id => `<option value="p:${id}">Diaporama: ${playlists[id].name}</option>`).join('') +
-                Object.keys(sequences || {}).map(id => `<option value="s:${id}">Séquence: ${sequences[id].name}</option>`).join('');
+            const { players } = await res.json();
             
-            const schedDevice = document.getElementById('schedule-device');
-            schedDevice.innerHTML = Object.keys(players).map(id => `<option value="${id}">${players[id].name}</option>`).join('');
-
-            const alertTarget = document.getElementById('alert-target');
-            alertTarget.innerHTML = '<option value="">Tous les écrans</option>' + Object.keys(players).map(id => `<option value="${id}">${players[id].name}</option>`).join('');
-
-            // Remplir les sélecteurs d'assignation de groupe
-            const assignGroupSelect = document.getElementById('assign-group-select');
-            assignGroupSelect.innerHTML = '<option value="">Sélectionner un groupe</option>' +
-                (groups || []).map(g => `<option value="${g.id}">${g.name}</option>`).join('');
-            
-            const assignPlaylistSelect = document.getElementById('assign-playlist-select');
-            assignPlaylistSelect.innerHTML = '<option value="">Sélectionner une cible</option>' +
-                Object.keys(playlists).map(id => `<option value="p:${id}">Diaporama: ${playlists[id].name}</option>`).join('') +
-                Object.keys(sequences || {}).map(id => `<option value="s:${id}">Séquence: ${sequences[id].name}</option>`).join('');
-
-            // Remplir le filtre de groupe
-            const filterGroupSelect = document.getElementById('filter-group');
-            filterGroupSelect.innerHTML = '<option value="">Tous les groupes</option>' +
-                (groups || []).map(g => `<option value="${g.id}">${g.name}</option>`).join('');
-
-            // Charger les réglages si admin
-            if (settings) {
-                document.getElementById('set-jwt-secret').value = settings.jwtSecret;
-                document.getElementById('set-api-key').value = settings.apiKey;
-                document.getElementById('set-disable-logs').checked = settings.disableClientLogs === 'true';
-                document.getElementById('set-disable-debug').checked = settings.disableDebugLogs === 'true';
-                document.getElementById('set-splash-url').value = settings.splashScreenUrl || '/img/splashscreen.png';
-            }
-
-            loadSchedules();
+            updatePlayerCounts(players);
             loadAnalytics();
         }
 
-        function filterPlayers() {
-            const selectedGroupId = document.getElementById('filter-group').value;
-            const playersListDiv = document.getElementById('players-list');
-            const playerRows = playersListDiv.querySelectorAll('table tr');
-
-            // La première ligne est l'en-tête, on la saute
-            for (let i = 1; i < playerRows.length; i++) {
-                const row = playerRows[i];
-                const playerGroupId = row.querySelector('select[onchange^="assignGroup"]').value;
-                
-                if (selectedGroupId === "" || playerGroupId === selectedGroupId) {
-                    row.style.display = '';
+        function updatePlayerCounts(players) {
+            let onlineCount = 0;
+            let offlineCount = 0;
+            for (let id in players) {
+                const p = players[id];
+                const isOnline = p.lastSeen && (new Date() - new Date(p.lastSeen) < 60000);
+                if (isOnline) {
+                    onlineCount++;
                 } else {
-                    row.style.display = 'none';
+                    offlineCount++;
                 }
             }
+            document.getElementById('online-screens-count').innerText = onlineCount;
+            document.getElementById('offline-screens-count').innerText = offlineCount;
         }
 
-        // Surcharge de la fonction load pour appliquer le filtre après le chargement initial
-        const originalLoad = load;
-        load = async () => { await originalLoad(); filterPlayers(); };
-
-
-        async function loadSchedules() {
-            const res = await fetch('/api/admin/schedules', { headers: { 'Authorization': `Bearer ${token}` } });
-            const schedules = await res.json();
-            let html = '<table border="1"><tr><th>Afficheur</th><th>Cible</th><th>Début</th><th>Fin</th><th>Action</th></tr>';
-            html += schedules.map(s => `
-                <tr>
-                    <td>${s.deviceId}</td>
-                    <td>${s.playlistId || s.sequenceId}</td>
-                    <td>${new Date(s.startTime).toLocaleString()}</td>
-                    <td>${new Date(s.endTime).toLocaleString()}</td>
-                    <td>
-                        <button class="secondary" onclick="editSchedule('${s.id}')">✏️</button>
-                        <button style="background:#e74c3c" onclick="deleteSchedule('${s.id}')">🗑️</button>
-                    </td>
-                </tr>`).join('');
-            document.getElementById('schedules-list').innerHTML = html + '</table>';
+        async function loadPlayerCounts() {
+            const res = await fetch('/api/admin/data', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.status === 403) return logout();
+            const { players } = await res.json();
+            updatePlayerCounts(players);
         }
 
         let analyticsChart = null;
@@ -468,14 +186,14 @@
             // Charger le tableau Top 50
             const res = await fetch('/api/admin/analytics', { headers });
             const stats = await res.json();
-            let html = '<table><tr><th>Média / URL</th><th>Nombre de vues</th><th>Temps total affiché</th></tr>';
+            let html = '<table><tr><th>Média / URL</th><th>Nombre de vues</th><th>Temps total affiché (hh:mm:ss)</th></tr>';
             if (stats.length === 0) html += '<tr><td colspan="3">Aucune donnée disponible</td></tr>';
             stats.forEach(s => {
-                const time = (s.totalDuration / 1000).toFixed(1);
+                const time = formatDuration(s.totalDuration);
                 html += `<tr>
                     <td style="font-size: 0.9em; word-break: break-all;">${s.itemUrl}</td>
                     <td>${s.count}</td>
-                    <td>${time} secondes</td>
+                    <td>${time}</td>
                 </tr>`;
             });
             document.getElementById('analytics-list').innerHTML = html + '</table>';
@@ -486,10 +204,20 @@
             renderAnalyticsChart(hourlyData);
         }
 
+        function formatDuration(ms) {
+            const seconds = Math.floor(ms / 1000);
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const remainingSeconds = seconds % 60;
+
+            const pad = (num) => String(num).padStart(2, '0');
+
+            return `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
+        }
+
         function renderAnalyticsChart(data) {
             const ctx = document.getElementById('analytics-chart').getContext('2d');
             if (analyticsChart) analyticsChart.destroy();
-
             analyticsChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -526,414 +254,7 @@
             }
         }
 
-        let currentSeqItems = [];
-        function addToSequence(id, name) {
-            currentSeqItems.push(id);
-            const builder = document.getElementById('seq-builder');
-            if (currentSeqItems.length === 1) builder.innerHTML = '';
-            const tag = document.createElement('span');
-            tag.style.cssText = "background:#3498db; padding:2px 8px; border-radius:15px; font-size:12px; display:flex; align-items:center; gap:5px;";
-            tag.innerHTML = `${name} <b style="cursor:pointer" onclick="this.parentElement.remove(); currentSeqItems.splice(currentSeqItems.indexOf('${id}'),1)">×</b>`;
-            builder.appendChild(tag);
-        }
-
-        async function saveSequence() {
-            const name = document.getElementById('seq-name').value;
-            if (!name || currentSeqItems.length === 0) return alert("Nom ou diaporamas manquants");
-            await fetch('/api/admin/sequences', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ name, playlistIds: currentSeqItems })
-            });
-            document.getElementById('seq-name').value = '';
-            document.getElementById('seq-builder').innerHTML = '<em style="color:#bdc3c7">Cliquez sur les diaporamas ci-dessous pour les ajouter...</em>';
-            currentSeqItems = [];
-            load();
-        }
-
-        async function deleteSequence(id) {
-            if (!confirm('Supprimer cette séquence ?')) return;
-            await fetch(`/api/admin/sequences/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-            load();
-        }
-
-        async function saveGroup() {
-            const name = document.getElementById('group-name').value;
-            if (!name) return alert("Nom du groupe manquant");
-            await fetch('/api/admin/groups', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ name })
-            });
-            document.getElementById('group-name').value = '';
-            load();
-        }
-
-        async function deleteGroup(id) {
-            if (!confirm('Supprimer ce groupe ? Les écrans associés seront détachés.')) return;
-            await fetch(`/api/admin/groups/${id}`, { 
-                method: 'DELETE', 
-                headers: { 'Authorization': `Bearer ${token}` } 
-            });
-            load();
-        }
-
-        async function assignGroup(deviceId, groupId) {
-            const res = await fetch(`/api/admin/players/${deviceId}/group`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ groupId: groupId || null })
-            });
-            if (res.ok) console.log(`Groupe mis à jour pour ${deviceId}`);
-            load();
-        }
-
-        async function captureGroup(groupId) {
-            const res = await fetch(`/api/admin/groups/${groupId}/screenshot`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!res.ok) alert('Erreur lors de l\'envoi de la demande de capture.');
-        }
-
-        async function assignPlaylistToGroup() {
-            const groupId = document.getElementById('assign-group-select').value;
-            const targetId = document.getElementById('assign-playlist-select').value;
-
-            if (!groupId) return alert("Veuillez sélectionner un groupe.");
-            if (!targetId) return alert("Veuillez sélectionner un diaporama ou une séquence.");
-
-            if (!confirm(`Voulez-vous vraiment assigner ${targetId} à TOUS les écrans du groupe ${groupId} ?`)) return;
-
-            const res = await fetch(`/api/admin/groups/${groupId}/assign`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ targetId })
-            });
-
-            if (res.ok) {
-                alert('Affectation du diaporama/séquence au groupe réussie !');
-                load(); // Recharger pour voir les changements
-            } else {
-                alert('Erreur lors de l\'affectation au groupe.');
-            }
-        }
-
-        async function loadAlerts() {
-            const res = await fetch('/api/admin/alerts', { headers: { 'Authorization': `Bearer ${token}` } });
-            const alerts = await res.json();
-            const container = document.getElementById('alerts-list');
-            container.innerHTML = alerts.map(a => `
-                <div style="background:#34495e; padding:10px; margin-bottom:5px; border-radius:4px; display:flex; justify-content:space-between; align-items:center; border-left: 5px solid ${getAlertColor(a.type)}">
-                    <span><strong>[${a.targetDeviceId || 'TOUS'}]</strong> ${a.text}</span>
-                    <button style="background:#e74c3c" onclick="deleteAlert(${a.id})">Arrêter</button>
-                </div>
-            `).join('');
-        }
-
-        function getAlertColor(type) {
-            if (type === 'danger') return '#e74c3c';
-            if (type === 'warning') return '#f39c12';
-            return '#3498db';
-        }
-
-        async function sendAlert() {
-            const text = document.getElementById('alert-text').value;
-            const type = document.getElementById('alert-type').value;
-            const targetDeviceId = document.getElementById('alert-target').value;
-            if (!text) return;
-
-            await fetch('/api/admin/alerts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ text, type, targetDeviceId })
-            });
-            document.getElementById('alert-text').value = '';
-            loadAlerts();
-        }
-
-        async function deleteAlert(id) {
-            await fetch(`/api/admin/alerts/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-            loadAlerts();
-        }
-
-        function resetScheduleForm() {
-            document.getElementById('schedule-id').value = '';
-            document.getElementById('schedule-device').value = '';
-            document.getElementById('schedule-playlist').value = '';
-            document.getElementById('schedule-start').value = '';
-            document.getElementById('schedule-end').value = '';
-        }
-
-        async function saveSchedule() {
-            const id = document.getElementById('schedule-id').value;
-            const deviceId = document.getElementById('schedule-device').value;
-            const target = document.getElementById('schedule-playlist').value;
-            const startTime = document.getElementById('schedule-start').value;
-            const endTime = document.getElementById('schedule-end').value;
-
-            if (!deviceId || !target || !startTime || !endTime) return alert("Veuillez remplir tous les champs.");
-
-            let playlistId = target.startsWith('p:') ? target.substring(2) : null;
-            let sequenceId = target.startsWith('s:') ? target.substring(2) : null;
-
-            const res = await fetch('/api/admin/schedules', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ id, deviceId, playlistId, sequenceId, startTime, endTime })
-            });
-            if (res.ok) {
-                alert('Planification enregistrée !');
-                resetScheduleForm();
-                loadSchedules();
-            } else alert('Erreur lors de l\'enregistrement de la planification.');
-        }
-
-        async function editSchedule(id) {
-            const res = await fetch('/api/admin/schedules', { headers: { 'Authorization': `Bearer ${token}` } });
-            const schedules = await res.json();
-            const schedule = schedules.find(s => s.id === id);
-            if (schedule) {
-                document.getElementById('schedule-id').value = schedule.id;
-                document.getElementById('schedule-device').value = schedule.deviceId;
-                document.getElementById('schedule-playlist').value = schedule.playlistId;
-                document.getElementById('schedule-start').value = schedule.startTime.substring(0, 16); // Format datetime-local
-                document.getElementById('schedule-end').value = schedule.endTime.substring(0, 16); // Format datetime-local
-            }
-        }
-
-        async function deleteSchedule(id) {
-            if (!confirm('Voulez-vous vraiment supprimer cette planification ?')) return;
-            const res = await fetch(`/api/admin/schedules/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                alert('Planification supprimée !');
-                loadSchedules();
-            } else alert('Erreur lors de la suppression de la planification.');
-        }
-
-        async function approvePlayer(deviceId) {
-            if (!confirm(`Voulez-vous vraiment approuver l'afficheur ${deviceId} ?`)) return;
-            const res = await fetch(`/api/admin/players/approve/${deviceId}`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                alert('Afficheur approuvé !');
-                load();
-            } else {
-                alert('Erreur lors de l\'approbation.');
-            }
-        }
-
-        async function removePlayer(deviceId) {
-            if (!confirm(`Voulez-vous vraiment supprimer l'afficheur ${deviceId} ?`)) return;
-            const res = await fetch(`/api/admin/players/${deviceId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                alert('Afficheur supprimé !');
-                load();
-            } else {
-                alert('Erreur lors de la suppression.');
-            }
-        }
-
-        async function deletePlaylist(id) {
-            if (!confirm('Voulez-vous vraiment supprimer ce diaporama ?')) return;
-            const res = await fetch(`/api/admin/playlists/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                alert('Diaporama supprimé !');
-                load();
-            } else {
-                alert('Erreur lors de la suppression.');
-            }
-        }
-
-        async function importPPTX(input) {
-            if (!input.files[0]) return;
-            const formData = new FormData();
-            formData.append('file', input.files[0]);
-            
-            alert("L'import est en cours... cela peut prendre du temps selon le nombre de slides.");
-            const res = await fetch('/api/admin/import-pptx', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: formData
-            });
-            if (res.ok) {
-                alert("Importation réussie ! Un nouveau diaporama a été créé.");
-                load();
-            }
-        }
-
-        async function forceSync(deviceId) {
-            if (!confirm(`Voulez-vous forcer la synchronisation de l'afficheur ${deviceId} ?`)) return;
-            const res = await fetch(`/api/admin/players/force-sync/${deviceId}`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                alert('Commande de synchronisation envoyée !');
-            } else {
-                alert('Erreur lors de l\'envoi de la commande de synchronisation.');
-            }
-        }
-
-        async function restartScreen(deviceId) {
-            if (!confirm(`Voulez-vous redémarrer l'afficheur ${deviceId} ?`)) return;
-            const res = await fetch(`/api/admin/players/restart-screen/${deviceId}`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                alert('Commande de redémarrage envoyée !');
-            } else {
-                alert('Erreur lors de l\'envoi de la commande de redémarrage.');
-            }
-        }
-
-        async function clearCache(deviceId) {
-            if (!confirm(`Voulez-vous nettoyer les fichiers locaux (cache média) de l'afficheur ${deviceId} ?`)) return;
-            const res = await fetch(`/api/admin/players/clear-cache/${deviceId}`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                alert('Commande de nettoyage envoyée !');
-            } else {
-                alert('Erreur lors de l\'envoi de la commande de nettoyage.');
-            }
-        }
-        async function downloadBackup() {
-            try {
-                const response = await fetch('/api/admin/backup', { 
-                    headers: { 'Authorization': `Bearer ${token}` } 
-                });
-
-                if (response.status === 401 || response.status === 403) {
-                    alert("Votre session a expiré ou vous n'avez pas les droits suffisants.");
-                    return logout();
-                }
-
-                if (!response.ok) {
-                    const errorText = await response.text().catch(() => "Erreur inconnue");
-                    throw new Error(`Erreur serveur (${response.status}) : ${errorText}`);
-                }
-
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = `backup_pidyn_${new Date().toISOString().slice(0,10)}.zip`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-            } catch (e) {
-                alert(e.message || "Erreur lors de la préparation du fichier de sauvegarde.");
-            }
-        }
-        async function restoreBackup(input) {
-            if (!input.files[0]) return;
-            if (!confirm("⚠️ ATTENTION : La restauration va écraser TOUTES vos données actuelles (médias et base de données). Le serveur redémarrera automatiquement. Continuer ?")) {
-                input.value = '';
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('file', input.files[0]);
-
-            try {
-                const res = await fetch('/api/admin/restore', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: formData
-                });
-                if (res.ok) {
-                    alert("Restauration réussie ! Le serveur va redémarrer. Veuillez vous reconnecter dans quelques instants.");
-                    logout();
-                } else {
-                    const errorText = await res.text();
-                    alert("Erreur lors de la restauration : " + errorText);
-                }
-            } catch (e) {
-                alert("Erreur réseau lors de l'envoi de la sauvegarde.");
-            } finally {
-                input.value = '';
-            }
-        }
-        function copyUrl(url) {
-            navigator.clipboard.writeText(url).then(() => {
-                alert('URL copiée ! Vous pouvez maintenant la coller dans le champ URL d\'un item.');
-            });
-        }
-
-        async function assign(deviceId, targetId) {
-            // Vérifier le statut du player avant d'assigner
-            const playerStatusRes = await fetch('/api/admin/data', { headers: { 'Authorization': `Bearer ${token}` } });
-            const playerData = await playerStatusRes.json();
-            const player = playerData.players[deviceId];
-            if (!player || player.status !== 'approved') {
-                alert('Impossible d\'affecter une playlist à un afficheur non approuvé.');
-                return;
-            }
-
-            await fetch('/api/admin/assign', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ deviceId, targetId })
-            });
-            alert('Affectation réussie !');
-            load();
-        }
-
-        function generateJWTSecret() {
-            const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+~`|}{[]:;?><,./-=";
-            let retVal = "";
-            const length = 64;
-            const values = new Uint32Array(length);
-            window.crypto.getRandomValues(values);
-            for (let i = 0; i < length; i++) {
-                retVal += charset.charAt(values[i] % charset.length);
-            }
-            const input = document.getElementById('set-jwt-secret');
-            input.value = retVal;
-            input.type = 'text'; // On l'affiche pour que l'utilisateur puisse le voir avant d'enregistrer
-        }
-
-        function handleLoginKey(event) {
-            if (event.key === 'Enter') {
-                login();
-            }
-        }
-
-        async function saveSettings() {
-            const jwtSecret = document.getElementById('set-jwt-secret').value;
-            const apiKey = document.getElementById('set-api-key').value;
-            const disableClientLogs = document.getElementById('set-disable-logs').checked;
-            const disableDebugLogs = document.getElementById('set-disable-debug').checked;
-            const splashScreenUrl = document.getElementById('set-splash-url').value;
-            if (!jwtSecret || !apiKey) return alert("Les paramètres ne peuvent pas être vides");
-            if (!confirm("Changer ces paramètres peut déconnecter les utilisateurs et les écrans. Continuer ?")) return;
-            const res = await fetch('/api/admin/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ jwtSecret, apiKey, disableClientLogs, disableDebugLogs, splashScreenUrl })
-            });
-            if (res.ok) {
-                alert('Paramètres enregistrés ! Vous allez être déconnecté pour appliquer le nouveau secret.');
-                logout();
-            } else alert('Erreur lors de l\'enregistrement des paramètres.');
-        }
-
+        // Lancement de la vérification initiale
         checkAuth();
     </script>
 </body>

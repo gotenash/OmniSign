@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PiDyn - Paramètres Système</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #2c3e50; color: white; }
+        section { background: #1a252f; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); margin-bottom: 20px; }
+        input, select { padding: 8px; border: 1px solid #34495e; border-radius: 4px; background: #34495e; color: white; width: 100%; box-sizing: border-box; }
+        button { padding: 10px 15px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button.secondary { background: #6c757d; }
+        h1, h2 { color: #3498db; }
+    </style>
+</head>
+<body>
+    <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1>PiDyn - Paramètres Système</h1>
+        <button class="secondary" onclick="logout()">Déconnexion</button>
+    </header>
+
+    <nav style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="secondary" onclick="window.location.href='/'">📊 Accueil</button>
+        <button class="secondary" onclick="window.location.href='/ecrans'">🖥 Écrans</button>
+        <button class="secondary" onclick="window.location.href='/diaporamas'">🎞 Diaporamas</button>
+        <button class="secondary" onclick="window.location.href='/canteen'">🍴 Cantine</button>
+        <button class="secondary" onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>
+        <button class="secondary" onclick="window.location.href='/users'">👥 Utilisateurs</button>
+        <button onclick="window.location.href='/systeme'">⚙️ Système</button>
+    </nav>
+
+    <section id="settings-section">
+        <h2>Paramètres Généraux</h2>
+        <div style="background:#1a252f; padding:15px; border-radius:8px;">
+            <div style="margin-bottom: 15px;">
+                <label>JWT Secret (Sécurité)</label>
+                <div style="display: flex; gap: 5px;">
+                    <input type="password" id="set-jwt-secret">
+                    <button class="secondary" onclick="generateJWTSecret()">🎲</button>
+                </div>
+            </div>
+            <div style="margin-bottom: 15px;"><label>API Key (Écrans)</label><input type="text" id="set-api-key"></div>
+            <div style="margin-bottom: 15px;"><label>URL Splashscreen</label><input type="text" id="set-splash-url"></div>
+            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                <div style="flex: 1;"><label>Réveil (ON)</label><input type="time" id="set-wake-time"></div>
+                <div style="flex: 1;"><label>Veille (OFF)</label><input type="time" id="set-sleep-time"></div>
+            </div>
+            <hr style="border: 0; border-top: 1px solid #34495e; margin: 20px 0;">
+            <label style="color: #3498db; font-weight: bold; margin-bottom: 10px; display: block;">Notifications Mail (SMTP)</label>
+            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                <div style="flex: 2;"><label>Serveur SMTP</label><input type="text" id="set-smtp-host" placeholder="smtp.gmail.com"></div>
+                <div style="flex: 1;"><label>Port</label><input type="number" id="set-smtp-port" placeholder="587"></div>
+            </div>
+            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                <div style="flex: 1;"><label>Utilisateur / Email</label><input type="text" id="set-smtp-user"></div>
+                <div style="flex: 1;"><label>Mot de passe</label><input type="password" id="set-smtp-pass"></div>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label>Adresse de notification (Destinataire)</label>
+                <input type="email" id="set-notification-email" placeholder="votre@email.com">
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button onclick="saveSettings()" style="flex: 2;">Enregistrer les paramètres</button>
+                <button class="secondary" onclick="testEmail()" style="flex: 1; background: #9b59b6;">📧 Tester</button>
+            </div>
+            <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                <input type="checkbox" id="set-disable-logs" style="width: auto; margin: 0;">
+                <label for="set-disable-logs" style="cursor: pointer;">Désactiver les logs/analytics sur les players</label>
+            </div>
+            <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                <input type="checkbox" id="set-disable-debug" style="width: auto; margin: 0;">
+                <label for="set-disable-debug" style="cursor: pointer;">Désactiver les logs techniques (Debug) sur les players</label>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h2>Sauvegarde et Maintenance</h2>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="downloadBackup()" style="background: #27ae60;">📦 Télécharger Sauvegarde</button>
+            <button onclick="document.getElementById('restore-input').click()" style="background: #e67e22;">📂 Restaurer Sauvegarde</button>
+            <input type="file" id="restore-input" style="display:none" accept=".zip" onchange="restoreBackup(this)">
+        </div>
+    </section>
+
+    <script>
+        let token = localStorage.getItem('pidyn_token');
+        let role = localStorage.getItem('pidyn_role');
+
+        if (!token || role !== 'admin') { alert("Accès réservé aux administrateurs"); window.location.href = '/'; }
+
+        function logout() { localStorage.removeItem('pidyn_token'); localStorage.removeItem('pidyn_role'); window.location.href = '/'; }
+
+        async function load() {
+            const res = await fetch('/api/admin/data', { headers: { 'Authorization': `Bearer ${token}` } });
+            const { settings } = await res.json();
+            if (settings) {
+                document.getElementById('set-jwt-secret').value = settings.jwtSecret;
+                document.getElementById('set-api-key').value = settings.apiKey;
+                document.getElementById('set-splash-url').value = settings.splashScreenUrl;
+                document.getElementById('set-wake-time').value = settings.screenWakeTime;
+                document.getElementById('set-sleep-time').value = settings.screenSleepTime;
+                document.getElementById('set-disable-logs').checked = settings.disableClientLogs === 'true';
+                document.getElementById('set-disable-debug').checked = settings.disableDebugLogs === 'true';
+                document.getElementById('set-smtp-host').value = settings.smtpHost || '';
+                document.getElementById('set-smtp-port').value = settings.smtpPort || '587';
+                document.getElementById('set-smtp-user').value = settings.smtpUser || '';
+                document.getElementById('set-smtp-pass').value = settings.smtpPass || '';
+                document.getElementById('set-notification-email').value = settings.notificationEmail || '';
+            }
+        }
+
+        function generateJWTSecret() {
+            let ret = "";
+            for (let i = 0; i < 64; i++) ret += "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".charAt(Math.floor(Math.random() * 62));
+            document.getElementById('set-jwt-secret').value = ret;
+            document.getElementById('set-jwt-secret').type = 'text';
+        }
+
+        async function saveSettings() {
+            const jwtSecret = document.getElementById('set-jwt-secret').value;
+            const apiKey = document.getElementById('set-api-key').value;
+            const splashScreenUrl = document.getElementById('set-splash-url').value;
+            const screenWakeTime = document.getElementById('set-wake-time').value;
+            const screenSleepTime = document.getElementById('set-sleep-time').value;
+            const disableClientLogs = document.getElementById('set-disable-logs').checked;
+            const disableDebugLogs = document.getElementById('set-disable-debug').checked;
+            const smtpHost = document.getElementById('set-smtp-host').value;
+            const smtpPort = document.getElementById('set-smtp-port').value;
+            const smtpUser = document.getElementById('set-smtp-user').value;
+            const smtpPass = document.getElementById('set-smtp-pass').value;
+            const notificationEmail = document.getElementById('set-notification-email').value;
+            
+            if (!confirm("Appliquer ?")) return;
+            const res = await fetch('/api/admin/settings', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ jwtSecret, apiKey, splashScreenUrl, screenWakeTime, screenSleepTime, disableClientLogs, disableDebugLogs,
+                                       smtpHost, smtpPort, smtpUser, smtpPass, notificationEmail })
+            });
+            if (res.ok) { 
+                alert('Enregistré !'); 
+                logout(); 
+            } else {
+                const error = await res.text();
+                alert('Erreur lors de la sauvegarde : ' + error);
+            }
+        }
+
+        async function testEmail() {
+            const smtpHost = document.getElementById('set-smtp-host').value;
+            const smtpPort = document.getElementById('set-smtp-port').value;
+            const smtpUser = document.getElementById('set-smtp-user').value;
+            const smtpPass = document.getElementById('set-smtp-pass').value;
+            const notificationEmail = document.getElementById('set-notification-email').value;
+
+            if (!smtpHost || !notificationEmail) return alert("Hôte SMTP et Email de notification requis pour le test");
+
+            const res = await fetch('/api/admin/test-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ smtpHost, smtpPort, smtpUser, smtpPass, notificationEmail })
+            });
+            if (res.ok) alert("Mail de test envoyé avec succès !");
+            else alert("Erreur lors de l'envoi : " + await res.text());
+        }
+
+        async function downloadBackup() {
+            const res = await fetch('/api/admin/backup', { headers: { 'Authorization': `Bearer ${token}` } });
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `backup_pidyn_${Date.now()}.zip`; a.click();
+        }
+
+        async function restoreBackup(input) {
+            if (!input.files[0] || !confirm("Écraser les données actuelles ?")) return;
+            const formData = new FormData(); formData.append('file', input.files[0]);
+            const res = await fetch('/api/admin/restore', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+            if (res.ok) { alert("Restauration réussie !"); logout(); }
+        }
+        load();
+    </script>
+</body>
+</html>

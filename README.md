@@ -85,6 +85,15 @@ PiDyn is a comprehensive digital signage solution designed to provide centralize
    ```
    The script will update the system, install Node.js, Chromium, X11, copy application files, install Node.js dependencies, and set up systemd services for automatic startup. It will then reboot the system.
 
+### Windows Client Setup
+1.  **Install Node.js:** Install the LTS version on the PC Stick.
+2.  **Configuration:** Create a `.bat` file to launch `sync-engine.js` with the environment variables `PIDYN_SERVER_URL`, `PIDYN_DEVICE_ID`, and `PIDYN_API_KEY`.
+3.  **Kiosk Shortcut:** Create a Chrome shortcut with the flags:
+   ```text
+   --kiosk --autoplay-policy=no-user-gesture-required --user-data-dir="C:\temp\chrome_profile" "file://C:/path/to/player.html"
+   ```
+4.  **Auto-start:** Place the `.bat` and the Chrome shortcut in the `shell:startup` folder.
+
 ## Usage
 1.  **Access Admin Panel:** Open a web browser and navigate to `http://your-server-ip:3000`.
 2.  **Login:** Use the default credentials (e.g., `admin`/`123456`) to log in. **It is highly recommended to change default passwords immediately.**
@@ -182,6 +191,15 @@ PiDyn est une solution complète d'affichage dynamique conçue pour offrir une g
    sudo /boot/setup_pi.sh
    ```
    Le script mettra à jour le système, installera Node.js, Chromium, X11, copiera les fichiers de l'application, installera les dépendances Node.js et configurera les services systemd pour un démarrage automatique. Il redémarrera ensuite le système.
+
+### Configuration du Client Windows
+1.  **Installer Node.js :** Installez la version LTS sur le PC Stick.
+2.  **Configuration :** Créez un fichier `.bat` pour lancer `sync-engine.js` avec les variables `PIDYN_SERVER_URL`, `PIDYN_DEVICE_ID`, et `PIDYN_API_KEY`.
+3.  **Raccourci Kiosque :** Créez un raccourci Chrome avec les drapeaux :
+   ```text
+   --kiosk --autoplay-policy=no-user-gesture-required --user-data-dir="C:\temp\chrome_profile" "file://C:/chemin/vers/player.html"
+   ```
+4.  **Démarrage Auto :** Placez le `.bat` et le raccourci Chrome dans le dossier `shell:startup`.
 
 ## Utilisation
 1.  **Accéder au Panneau d'Administration:** Ouvrez un navigateur web et accédez à `http://votre-ip-serveur:3000`.

@@ -113,6 +113,7 @@
             <div class="screen-mockup" id="preview-screen" 
                  onmousedown="handleMouseDown(event)">
                 <!-- Rendu dynamique ici -->
+                <div id="template-preview-layer" style="position:absolute; inset:0; z-index:4; display:none; pointer-events:none; background:rgba(0,0,0,0.8); flex-direction:column; justify-content:center; align-items:center; padding:20px; text-align:center;"></div>
             </div>
             <p id="item-info" style="margin-top: 10px; color: #bdc3c7;">Dessinez un cadre sur l'écran pour ajouter une zone</p>
         </div>
@@ -127,6 +128,11 @@
                 <input type="color" id="page-bg-color" oninput="updatePageBgColor()">
 
                 <button class="danger" onclick="deleteCurrentItem()" style="width: 100%; margin-top: 10px;">Supprimer la page</button>
+            </div>
+
+            <div id="template-editor" style="display: none; border-bottom: 1px solid #34495e; padding-bottom: 15px; margin-bottom: 15px;">
+                <h3>Contenu du Modèle</h3>
+                <div id="template-fields"></div>
             </div>
 
             <h3>Propriétés de la zone</h3>
@@ -224,8 +230,13 @@
         </div>
     </div>
 
-    <div class="timeline-area" id="timeline">
-        <button onclick="addNewItem()" style="min-width: 100px; height: 80px; background: #27ae60;">+ Ajouter</button>
+    <div class="timeline-area">
+        <div id="timeline-controls" style="display: flex; flex-direction: column; gap: 5px; padding-right: 20px; border-right: 1px solid #34495e;">
+            <button onclick="addNewItem()" style="min-width: 100px; background: #27ae60;">+ Page Vide</button>
+            <button onclick="addTemplate('canteen')" style="min-width: 100px; background: #f39c12; font-size: 11px;">+ Modèle Cantine</button>
+            <button onclick="addTemplate('meeting')" style="min-width: 100px; background: #9b59b6; font-size: 11px;">+ Modèle Réunion</button>
+        </div>
+        <div id="timeline-list" style="display: flex; align-items: center; gap: 10px; flex: 1; overflow-x: auto; padding-left: 10px;"></div>
         <!-- Items de la frise -->
     </div>
 
@@ -363,11 +374,8 @@
         }
 
         function renderTimeline() {
-            const container = document.getElementById('timeline');
-            // Garder seulement le bouton ajouter
-            const addBtn = container.querySelector('button');
+            const container = document.getElementById('timeline-list');
             container.innerHTML = '';
-            container.appendChild(addBtn);
 
             playlistData.items.forEach((item, index) => {
                 const div = document.createElement('div');
@@ -433,9 +441,67 @@
             document.getElementById('page-duration').value = item.duration;
             document.getElementById('page-bg-color').value = item.backgroundColor || '#000000';
 
-            document.getElementById('zone-editor').style.display = 'none';
+            if (item.template) {
+                document.getElementById('template-editor').style.display = 'block';
+                document.getElementById('zone-editor').style.display = 'none';
+                renderTemplateFields(item);
+            } else {
+                document.getElementById('template-editor').style.display = 'none';
+                document.getElementById('zone-editor').style.display = 'none';
+            }
+
             renderPreview();
             renderTimeline();
+        }
+
+        function renderTemplateFields(item) {
+            const container = document.getElementById('template-fields');
+            container.innerHTML = '';
+            
+            const configs = {
+                canteen: [
+                    { key: 'useLiveMenu', label: 'Utiliser le menu de la semaine (Auto)', type: 'checkbox' },
+                    { key: 'title', label: 'Titre', type: 'text' },
+                    { key: 'starter', label: 'Entrée', type: 'text' },
+                    { key: 'main', label: 'Plat Principal', type: 'text' },
+                    { key: 'dessert', label: 'Dessert', type: 'text' }
+                ],
+                meeting: [
+                    { key: 'room', label: 'Nom de la salle', type: 'text' },
+                    { key: 'subject', label: 'Sujet', type: 'text' },
+                    { key: 'status', label: 'Statut', type: 'select', options: ['Disponible', 'Occupée'] }
+                ]
+            };
+
+            configs[item.template].forEach(field => {
+                const label = document.createElement('label');
+                label.innerText = field.label;
+                let input;
+                if (field.type === 'select') {
+                    input = document.createElement('select');
+                    field.options.forEach(opt => {
+                        const o = document.createElement('option');
+                        o.value = opt; o.text = opt;
+                        if (item.data[field.key] === opt) o.selected = true;
+                        input.add(o);
+                    });
+                } else if (field.type === 'checkbox') {
+                    input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.checked = !!item.data[field.key];
+                    input.style.width = 'auto';
+                } else {
+                    input = document.createElement('input');
+                    input.type = 'text';
+                    input.value = item.data[field.key] || '';
+                }
+                input.onchange = (e) => { 
+                    item.data[field.key] = field.type === 'checkbox' ? e.target.checked : e.target.value; 
+                    renderPreview(); 
+                };
+                container.appendChild(label);
+                container.appendChild(input);
+            });
         }
 
         function renderPreview() {
@@ -460,6 +526,27 @@
                 bgLayer.style.display = 'none';
             }
             
+            const tplLayer = document.getElementById('template-preview-layer');
+            if (item && item.template) {
+                tplLayer.style.display = 'flex';
+                if (item.template === 'canteen') {
+                    tplLayer.innerHTML = `
+                        <div style="color:#3498db; font-weight:bold; font-size:24px; border-bottom:2px solid #3498db; margin-bottom:15px; padding-bottom:5px;">${item.data.title || 'MENU'}</div>
+                        <div style="font-size:16px;">
+                            <p><b>Entrée:</b> ${item.data.starter}</p>
+                            <p><b>Plat:</b> ${item.data.main}</p>
+                            <p><b>Dessert:</b> ${item.data.dessert}</p>
+                        </div>`;
+                } else if (item.template === 'meeting') {
+                    tplLayer.innerHTML = `
+                        <div style="font-size:28px; font-weight:bold; margin-bottom:10px;">${item.data.room}</div>
+                        <div style="color:#bdc3c7; font-size:18px; margin-bottom:20px;">${item.data.subject}</div>
+                        <div style="display:inline-block; padding:8px 25px; border-radius:20px; background:${item.data.status === 'Disponible' ? '#27ae60' : '#e74c3c'}">${item.data.status}</div>`;
+                }
+            } else {
+                tplLayer.style.display = 'none';
+            }
+
             if (selectedIndex === -1) {
                 document.querySelectorAll('.screen-mockup .zone').forEach(z => z.remove());
                 return;
@@ -830,6 +917,21 @@
             saveStateForUndo();
             playlistData.items.push({ 
                 duration: 5000, 
+                zones: [] 
+            });
+            selectItem(playlistData.items.length - 1);
+        }
+
+        function addTemplate(type) {
+            saveStateForUndo();
+            const defaults = {
+                canteen: { title: 'Menu du Jour', starter: 'Salade', main: 'Plat', dessert: 'Fruits', useLiveMenu: false },
+                meeting: { room: 'Salle A', subject: 'Libre', status: 'Disponible' }
+            };
+            playlistData.items.push({ 
+                duration: 10000, 
+                template: type,
+                data: defaults[type],
                 zones: [] 
             });
             selectItem(playlistData.items.length - 1);

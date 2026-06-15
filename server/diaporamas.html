@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PiDyn - Gestion des Diaporamas</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #2c3e50; color: white; }
+        section { background: #1a252f; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #34495e; }
+        th, td { padding: 10px; border: 1px solid #1a252f; text-align: left; }
+        th { background: #3498db; color: white; }
+        input, select { padding: 8px; border: 1px solid #34495e; border-radius: 4px; background: #34495e; color: white; }
+        button { padding: 10px 15px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button.secondary { background: #6c757d; }
+        button.danger { background: #e74c3c; }
+        h1, h2 { color: #3498db; }
+    </style>
+</head>
+<body>
+    <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1>PiDyn - Gestion des Diaporamas</h1>
+        <button class="secondary" onclick="logout()">Déconnexion</button>
+    </header>
+
+    <nav style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="secondary" onclick="window.location.href='/'">📊 Accueil</button>
+        <button class="secondary" onclick="window.location.href='/ecrans'">🖥 Écrans</button>
+        <button onclick="window.location.href='/diaporamas'">🎞 Diaporamas</button>
+        <button class="secondary" onclick="window.location.href='/canteen'">🍴 Cantine</button>
+        <button class="secondary" onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>
+        <button class="secondary" onclick="window.location.href='/users'">👥 Utilisateurs</button>
+        <button class="secondary" onclick="window.location.href='/systeme'">⚙️ Système</button>
+    </nav>
+
+    <section>
+        <h2>Mes Diaporamas</h2>
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+            <button onclick="window.location.href='/editor'">+ Créer un nouveau diaporama</button>
+        </div>
+        <div id="playlists-list"></div>
+    </section>
+
+    <section id="schedules-section">
+        <h2>Agenda des Diffusions</h2>
+        <div style="display: flex; gap: 10px; align-items: end; margin-bottom: 15px; flex-wrap: wrap;">
+            <input type="hidden" id="schedule-id">
+            <div><label>Écran</label><br><select id="schedule-device"></select></div>
+            <div><label>Cible</label><br><select id="schedule-playlist"></select></div>
+            <div><label>Début</label><br><input type="datetime-local" id="schedule-start"></div>
+            <div><label>Fin</label><br><input type="datetime-local" id="schedule-end"></div>
+            <button onclick="saveSchedule()">Planifier</button>
+            <button class="secondary" onclick="resetScheduleForm()">Annuler</button>
+        </div>
+        <div id="schedules-list"></div>
+    </section>
+
+    <script>
+        let token = localStorage.getItem('pidyn_token');
+        if (!token) window.location.href = '/';
+
+        function logout() { localStorage.removeItem('pidyn_token'); localStorage.removeItem('pidyn_role'); window.location.href = '/'; }
+
+        async function load() {
+            const res = await fetch('/api/admin/data', { headers: { 'Authorization': `Bearer ${token}` } });
+            const { players, playlists, sequences } = await res.json();
+
+            document.getElementById('playlists-list').innerHTML = Object.keys(playlists).map(id => `
+                <div style="background:#34495e; padding:10px; margin-bottom:5px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                    <span><strong>${playlists[id].name}</strong></span>
+                    <div>
+                        <button class="secondary" onclick="window.location.href='/editor?id=${id}'">✏️</button>
+                        <button class="danger" onclick="deletePlaylist('${id}')">🗑️</button>
+                    </div>
+                </div>`).join('');
+
+            document.getElementById('schedule-device').innerHTML = Object.keys(players).map(id => `<option value="${id}">${players[id].name}</option>`).join('');
+            document.getElementById('schedule-playlist').innerHTML = '<option value="">Choisir...</option>' + 
+                Object.keys(playlists).map(id => `<option value="p:${id}">Diaporama: ${playlists[id].name}</option>`).join('') +
+                Object.keys(sequences).map(id => `<option value="s:${id}">Séquence: ${sequences[id].name}</option>`).join('');
+            
+            loadSchedules();
+        }
+
+        async function deletePlaylist(id) { if (confirm('Supprimer ?')) { await fetch(`/api/admin/playlists/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); load(); } }
+
+        async function loadSchedules() {
+            const res = await fetch('/api/admin/schedules', { headers: { 'Authorization': `Bearer ${token}` } });
+            const schedules = await res.json();
+            document.getElementById('schedules-list').innerHTML = '<table><tr><th>Écran</th><th>Cible</th><th>Début</th><th>Fin</th><th>Action</th></tr>' +
+                schedules.map(s => `<tr>
+                    <td>${s.deviceId}</td>
+                    <td>${s.playlistId || s.sequenceId}</td>
+                    <td>${new Date(s.startTime).toLocaleString()}</td>
+                    <td>${new Date(s.endTime).toLocaleString()}</td>
+                    <td>
+                        <button class="secondary" onclick="editSchedule('${s.id}')">✏️</button>
+                        <button class="danger" onclick="deleteSchedule('${s.id}')">🗑️</button>
+                    </td>
+                </tr>`).join('') + '</table>';
+        }
+
+        async function saveSchedule() {
+            const id = document.getElementById('schedule-id').value;
+            const deviceId = document.getElementById('schedule-device').value;
+            const target = document.getElementById('schedule-playlist').value;
+            const startTime = document.getElementById('schedule-start').value;
+            const endTime = document.getElementById('schedule-end').value;
+            if (!deviceId || !target || !startTime || !endTime) return;
+            let playlistId = target.startsWith('p:') ? target.substring(2) : null;
+            let sequenceId = target.startsWith('s:') ? target.substring(2) : null;
+            await fetch('/api/admin/schedules', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ id, deviceId, playlistId, sequenceId, startTime, endTime })
+            });
+            resetScheduleForm();
+            loadSchedules();
+        }
+
+        async function editSchedule(id) {
+            const res = await fetch('/api/admin/schedules', { headers: { 'Authorization': `Bearer ${token}` } });
+            const schedules = await res.json();
+            const s = schedules.find(x => x.id === id);
+            if (s) {
+                document.getElementById('schedule-id').value = s.id;
+                document.getElementById('schedule-device').value = s.deviceId;
+                document.getElementById('schedule-playlist').value = s.playlistId ? `p:${s.playlistId}` : `s:${s.sequenceId}`;
+                document.getElementById('schedule-start').value = s.startTime.substring(0, 16);
+                document.getElementById('schedule-end').value = s.endTime.substring(0, 16);
+            }
+        }
+
+        async function deleteSchedule(id) { if (confirm('Supprimer ?')) { await fetch(`/api/admin/schedules/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); loadSchedules(); } }
+        function resetScheduleForm() {
+            document.getElementById('schedule-id').value = '';
+            document.getElementById('schedule-playlist').value = '';
+            document.getElementById('schedule-start').value = '';
+            document.getElementById('schedule-end').value = '';
+        }
+
+        load();
+    </script>
+</body>
+</html>

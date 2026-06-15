@@ -9,6 +9,7 @@ const AdmZip = require('adm-zip');
 const mime = require('mime-types');
 const { exec } = require('child_process');
 const util = require('util');
+const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const knex = require('knex');
 const sqlite3 = require('sqlite3'); // Required by knex for SQLite
@@ -45,7 +46,14 @@ let JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_very_secret_and_
 let API_KEY = process.env.PIDYN_API_KEY || 'ma_cle_secrete_123';
 let DISABLE_CLIENT_LOGS = false;
 let DISABLE_DEBUG_LOGS = false;
+let SCREEN_WAKE_TIME = '07:00';
+let SCREEN_SLEEP_TIME = '22:00';
 let SPLASH_SCREEN_URL = '/img/splashscreen.png';
+let SMTP_HOST = '';
+let SMTP_PORT = '587';
+let SMTP_USER = '';
+let SMTP_PASS = '';
+let NOTIFICATION_EMAIL = '';
 const SQLITE_DB_PATH = path.join(__dirname, 'pidyn.sqlite'); // New SQLite DB path
 const MEDIA_DIR = path.join(__dirname, 'public/media');
 
@@ -70,7 +78,8 @@ const defaultData = {
     users: [
         { username: 'admin', password: '123456', role: 'admin' },
         { username: 'editeur', password: '123456', role: 'editor' },
-        { username: 'auteur', password: '123456', role: 'author' }
+        { username: 'auteur', password: '123456', role: 'author' },
+        { username: 'cuisinier', password: '123456', role: 'cook' }
     ],
     settings: {
         jwtSecret: 'your_jwt_secret_key_very_secret_and_long',
@@ -86,7 +95,7 @@ async function initializeDatabase() {
                 table.increments('id').primary();
                 table.string('username').unique().notNullable();
                 table.string('password').notNullable();
-                table.string('role').notNullable(); // admin, editor, author
+                table.string('role').notNullable(); // admin, editor, author, cook
                 table.string('email').unique();
             });
             console.log('Table "users" created.');
@@ -200,7 +209,14 @@ async function initializeDatabase() {
                 { key: 'apiKey', value: 'ma_cle_secrete_123' },
                 { key: 'disableClientLogs', value: 'false' },
                 { key: 'splashScreenUrl', value: '/img/splashscreen.png' },
-                { key: 'disableDebugLogs', value: 'false' }
+                { key: 'disableDebugLogs', value: 'false' },
+                { key: 'screenWakeTime', value: '07:00' },
+                { key: 'screenSleepTime', value: '22:00' },
+                { key: 'smtpHost', value: '' },
+                { key: 'smtpPort', value: '587' },
+                { key: 'smtpUser', value: '' },
+                { key: 'smtpPass', value: '' },
+                { key: 'notificationEmail', value: '' }
             ]);
             console.log('Default settings inserted.');
         }
@@ -215,6 +231,26 @@ async function initializeDatabase() {
         if (!debugSetting) {
             await db('settings').insert({ key: 'disableDebugLogs', value: 'false' });
             console.log('Setting "disableDebugLogs" ajouté.');
+        }
+        // Migration : s'assurer que les temps de veille existent
+        const wakeSetting = await db('settings').where({ key: 'screenWakeTime' }).first();
+        if (!wakeSetting) {
+            await db('settings').insert({ key: 'screenWakeTime', value: '07:00' });
+            console.log('Setting "screenWakeTime" ajouté.');
+        }
+        const sleepSetting = await db('settings').where({ key: 'screenSleepTime' }).first();
+        if (!sleepSetting) {
+            await db('settings').insert({ key: 'screenSleepTime', value: '22:00' });
+            console.log('Setting "screenSleepTime" ajouté.');
+        }
+        // Migration : SMTP settings
+        const smtpKeys = ['smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'notificationEmail'];
+        for (const k of smtpKeys) {
+            const exists = await db('settings').where({ key: k }).first();
+            if (!exists) {
+                await db('settings').insert({ key: k, value: k === 'smtpPort' ? '587' : '' });
+                console.log(`Setting "${k}" ajouté.`);
+            }
         }
     });
 
@@ -255,6 +291,17 @@ async function initializeDatabase() {
             console.log('Table "alerts" créée.');
         }
     });
+
+    await db.schema.hasTable('canteen_menus').then(async (exists) => {
+        if (!exists) {
+            await db.schema.createTable('canteen_menus', (table) => {
+                table.string('week_id').primary(); // Format: YYYY-WW
+                table.json('data').notNullable();  // Stocke l'objet menu complet
+                table.timestamp('updatedAt').defaultTo(db.fn.now());
+            });
+            console.log('Table "canteen_menus" créée.');
+        }
+    });
 }
 
 // Load settings from DB
@@ -264,12 +311,26 @@ async function loadSettings() {
     const apiSetting = settings.find(s => s.key === 'apiKey');
     const logsSetting = settings.find(s => s.key === 'disableClientLogs');
     const debugSetting = settings.find(s => s.key === 'disableDebugLogs');
+    const wakeSetting = settings.find(s => s.key === 'screenWakeTime');
+    const sleepSetting = settings.find(s => s.key === 'screenSleepTime');
     const splashSetting = settings.find(s => s.key === 'splashScreenUrl');
+    const smtpHostSetting = settings.find(s => s.key === 'smtpHost');
+    const smtpPortSetting = settings.find(s => s.key === 'smtpPort');
+    const smtpUserSetting = settings.find(s => s.key === 'smtpUser');
+    const smtpPassSetting = settings.find(s => s.key === 'smtpPass');
+    const notifyEmailSetting = settings.find(s => s.key === 'notificationEmail');
     if (jwtSetting) JWT_SECRET = process.env.JWT_SECRET || jwtSetting.value;
     if (apiSetting) API_KEY = process.env.PIDYN_API_KEY || apiSetting.value;
     if (logsSetting) DISABLE_CLIENT_LOGS = logsSetting.value === 'true';
     if (debugSetting) DISABLE_DEBUG_LOGS = debugSetting.value === 'true';
+    if (wakeSetting) SCREEN_WAKE_TIME = wakeSetting.value;
+    if (sleepSetting) SCREEN_SLEEP_TIME = sleepSetting.value;
     if (splashSetting) SPLASH_SCREEN_URL = splashSetting.value;
+    if (smtpHostSetting) SMTP_HOST = smtpHostSetting.value;
+    if (smtpPortSetting) SMTP_PORT = smtpPortSetting.value;
+    if (smtpUserSetting) SMTP_USER = smtpUserSetting.value;
+    if (smtpPassSetting) SMTP_PASS = smtpPassSetting.value;
+    if (notifyEmailSetting) NOTIFICATION_EMAIL = notifyEmailSetting.value;
 }
 
 // Initialize DB and migrate data on server start
@@ -306,10 +367,20 @@ const checkSchedules = async (targetDeviceId = null, forceEmit = false) => {
 
     const schedules = await db('schedules').select('*');
 
+    // Calcul de l'état de l'écran (On/Off) basé sur l'heure actuelle
+    const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    const isAwakeTime = SCREEN_WAKE_TIME < SCREEN_SLEEP_TIME 
+        ? (currentTimeStr >= SCREEN_WAKE_TIME && currentTimeStr < SCREEN_SLEEP_TIME)
+        : (currentTimeStr >= SCREEN_WAKE_TIME || currentTimeStr < SCREEN_SLEEP_TIME);
+
     for (const player of players) {
         if (player.status !== 'approved') continue; // Ne planifier que pour les afficheurs approuvés
 
         const deviceId = player.id;
+
+        // Envoyer la commande de mise en veille/réveil à l'écran
+        io.to(deviceId).emit('screen-command', { action: isAwakeTime ? 'on' : 'off' });
+
         let activeSchedule = null;
         for (const schedule of schedules) {
             if (schedule.deviceId === deviceId) {
@@ -419,6 +490,26 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
+// Route pour la gestion des écrans
+app.get('/ecrans', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ecrans.html'));
+});
+
+// Route pour la gestion des diaporamas et séquences
+app.get('/diaporamas', (req, res) => {
+    res.sendFile(path.join(__dirname, 'diaporamas.html'));
+});
+
+// Route pour les paramètres système
+app.get('/systeme', (req, res) => {
+    res.sendFile(path.join(__dirname, 'systeme.html'));
+});
+
+// Route pour la gestion de la cantine (accessible par cook, author, editor, admin)
+app.get('/canteen', (req, res) => {
+    res.sendFile(path.join(__dirname, 'canteen.html'));
+});
+
 // Route pour l'éditeur de diaporama
 app.get('/editor', (req, res) => {
     res.sendFile(path.join(__dirname, 'editor.html'));
@@ -466,7 +557,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // API Admin : Lister les players et affecter des playlists
-app.get('/api/admin/data', authMiddleware, checkRole(['admin', 'editor', 'author']), (req, res) => {
+app.get('/api/admin/data', authMiddleware, checkRole(['admin', 'editor', 'author', 'cook']), (req, res) => {
     // Fetch all data from DB
     Promise.all([
         db('players').select('*'),
@@ -508,7 +599,10 @@ app.post('/api/player/log', authMiddleware, (req, res) => {
     const { deviceId, playlistId, itemUrl, duration } = req.body;
     console.log(`📊 Statistique reçue de ${deviceId}: ${itemUrl} (${duration}ms)`);
     db('analytics').insert({ deviceId, playlistId, itemUrl, duration })
-        .then(() => res.json({ success: true }))
+        .then(() => {
+            io.emit('admin-analytics-update'); // Notifier les admins d'une nouvelle stat
+            res.json({ success: true });
+        })
         .catch(err => res.status(500).send(err.message));
 });
 
@@ -528,7 +622,7 @@ app.get('/api/admin/analytics', authMiddleware, checkRole(['admin', 'editor']), 
 app.get('/api/admin/analytics/hourly', authMiddleware, checkRole(['admin', 'editor']), (req, res) => {
     // Récupérer les stats groupées par heure pour les dernières 24 heures
     db('analytics')
-        .select(db.raw("strftime('%H', timestamp) as hour"))
+        .select(db.raw("strftime('%H', timestamp, 'localtime') as hour")) // Utiliser l'heure locale
         .count('id as count')
         .where('timestamp', '>', db.raw("datetime('now', '-24 hours')"))
         .groupBy('hour')
@@ -945,25 +1039,71 @@ app.delete('/api/admin/playlists/:id', authMiddleware, checkRole(['admin', 'edit
         .catch(err => res.status(500).send('Error deleting playlist: ' + err.message));
 });
 
-app.post('/api/admin/settings', authMiddleware, checkRole(['admin']), (req, res) => {
-    const { jwtSecret, apiKey, disableClientLogs, disableDebugLogs, splashScreenUrl } = req.body;
-    if (!jwtSecret || !apiKey) return res.status(400).send('Données manquantes');
-    db('settings').where({ key: 'jwtSecret' }).update({ value: jwtSecret })
-        .then(() => db('settings').where({ key: 'apiKey' }).update({ value: apiKey }))
-        .then(() => db('settings').where({ key: 'disableClientLogs' }).update({ value: String(!!disableClientLogs) }))
-        .then(() => db('settings').where({ key: 'disableDebugLogs' }).update({ value: String(!!disableDebugLogs) }))
-        .then(() => db('settings').where({ key: 'splashScreenUrl' }).update({ value: splashScreenUrl || '/img/splashscreen.png' }))
-        .then(() => {
-            JWT_SECRET = jwtSecret;
-            API_KEY = apiKey;
-            DISABLE_CLIENT_LOGS = !!disableClientLogs;
-            DISABLE_DEBUG_LOGS = !!disableDebugLogs;
-            SPLASH_SCREEN_URL = splashScreenUrl || '/img/splashscreen.png';
-            checkSchedules(null, true); // Force la mise à jour de tous les écrans connectés
-            console.log("⚙️ Paramètres système mis à jour via l'interface admin.");
-            res.json({ success: true });
-        })
-        .catch(err => res.status(500).send('Error saving settings: ' + err.message));
+app.post('/api/admin/settings', authMiddleware, checkRole(['admin']), async (req, res) => {
+    const settingsToUpdate = req.body;
+    if (!settingsToUpdate.jwtSecret || !settingsToUpdate.apiKey) return res.status(400).send('Données manquantes');
+
+    try {
+        const updates = Object.entries(settingsToUpdate).map(([key, value]) => {
+            // Normalisation des valeurs pour la DB (booleans en string)
+            let finalValue = value;
+            if (typeof value === 'boolean') finalValue = String(value);
+            
+            return db('settings')
+                .insert({ key, value: String(finalValue) })
+                .onConflict('key')
+                .merge();
+        });
+
+        await Promise.all(updates);
+
+        // Mise à jour des variables globales en mémoire
+        JWT_SECRET = settingsToUpdate.jwtSecret;
+        API_KEY = settingsToUpdate.apiKey;
+        DISABLE_CLIENT_LOGS = !!settingsToUpdate.disableClientLogs;
+        DISABLE_DEBUG_LOGS = !!settingsToUpdate.disableDebugLogs;
+        SCREEN_WAKE_TIME = settingsToUpdate.screenWakeTime || '07:00';
+        SCREEN_SLEEP_TIME = settingsToUpdate.screenSleepTime || '22:00';
+        SPLASH_SCREEN_URL = settingsToUpdate.splashScreenUrl || '/img/splashscreen.png';
+        SMTP_HOST = settingsToUpdate.smtpHost || '';
+        SMTP_PORT = settingsToUpdate.smtpPort || '587';
+        SMTP_USER = settingsToUpdate.smtpUser || '';
+        SMTP_PASS = settingsToUpdate.smtpPass || '';
+        NOTIFICATION_EMAIL = settingsToUpdate.notificationEmail || '';
+
+        checkSchedules(null, true); 
+        console.log("⚙️ Paramètres système mis à jour.");
+        res.json({ success: true });
+    } catch (err) {
+        console.error("Erreur sauvegarde settings:", err);
+        res.status(500).send('Error saving settings: ' + err.message);
+    }
+});
+app.post('/api/admin/test-email', authMiddleware, checkRole(['admin']), async (req, res) => {
+    const { smtpHost, smtpPort, smtpUser, smtpPass, notificationEmail } = req.body;
+    
+    const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: parseInt(smtpPort),
+        secure: parseInt(smtpPort) === 465, // SSL sur 465, TLS ailleurs
+        auth: {
+            user: smtpUser,
+            pass: smtpPass
+        }
+    });
+
+    try {
+        await transporter.sendMail({
+            from: `"PiDyn System" <${smtpUser}>`,
+            to: notificationEmail,
+            subject: "Test de notification PiDyn",
+            text: "Ceci est un mail de test envoyé depuis votre serveur d'affichage dynamique PiDyn.",
+            html: "<b>Ceci est un mail de test</b> envoyé depuis votre serveur d'affichage dynamique PiDyn."
+        });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).send(error.message);
+    }
 });
 
 // API Admin : Outil de sauvegarde (Export ZIP)
@@ -1060,6 +1200,21 @@ app.post('/api/admin/players/restart-screen/:deviceId', authMiddleware, checkRol
             }
         })
         .catch(err => res.status(500).send('Error restarting screen: ' + err.message));
+});
+
+app.post('/api/admin/players/screenshot/:deviceId', authMiddleware, checkRole(['admin', 'editor']), (req, res) => {
+    const { deviceId } = req.params;
+    db('players').where({ id: deviceId }).first()
+        .then(player => {
+            if (player) {
+                io.to(deviceId).emit('request-screenshot');
+                console.log(`📸 Demande de capture envoyée à ${deviceId}`);
+                res.json({ success: true });
+            } else {
+                res.status(404).send('Player non trouvé');
+            }
+        })
+        .catch(err => res.status(500).send('Error sending screenshot command: ' + err.message));
 });
 
 app.post('/api/admin/players/clear-cache/:deviceId', authMiddleware, checkRole(['admin', 'editor']), (req, res) => {
@@ -1166,6 +1321,12 @@ io.use((socket, next) => {
 
 io.on('connection', async (socket) => {
     const deviceId = socket.handshake.query.deviceId;
+    
+    if (!deviceId || deviceId === 'undefined' || deviceId === 'null') {
+        console.error(`[SOCKET] Connexion refusée : deviceId manquant ou invalide pour le socket ${socket.id}`);
+        return socket.disconnect(true);
+    }
+
     console.log(`Player connecté : ${deviceId}`);
     
     socket.join(deviceId);
