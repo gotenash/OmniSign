@@ -22,7 +22,16 @@ PiDyn is a comprehensive digital signage solution designed to provide centralize
 *   **Advanced Analytics:** Track media playback frequency and duration with visual charts (Chart.js) and a "Top 50" leaderboard.
 *   **Remote Device Control:** Take screenshots, force synchronization, clear local cache, or restart the client service directly from the dashboard.
 *   **Group Management:** Organize players by location or category to assign content or trigger actions at scale.
-*   **User Management:** Create and manage users with different roles (admin, editor, author) for granular access control. Passwords are securely hashed using bcrypt.
+*   **User Management:** Create and manage users with different roles (admin, editor, author, cook) for granular access control. Passwords are securely hashed using bcrypt.
+
+### User Roles
+| Role | Capabilities |
+| :--- | :--- |
+| **Admin** | **Full System Control**: User management, system settings, backups, hardware control, and content management. |
+| **Editor** | **Operations & Content**: Manage playlists, schedules, media, and remote device commands (screenshots, restart). |
+| **Author** | **Content Creation**: Access to the media library and playlist editor only. |
+| **Cook** | **Canteen Specialist**: Dedicated access to the Canteen menu management. |
+
 *   **Playlist Management:** Create, edit, and delete dynamic playlists composed of various media types (images, videos).
 *   **Media Management:** Upload and organize media files (images, videos) to be used in playlists.
 *   **Player Management:** Register, approve, and assign specific playlists to individual Raspberry Pi display units. Monitor their status (last seen).
@@ -125,7 +134,16 @@ PiDyn est une solution complète d'affichage dynamique conçue pour offrir une g
 *   **Analyses et Statistiques :** Suivez la fréquence et la durée de diffusion des médias avec des graphiques visuels et un classement "Top 50".
 *   **Contrôle à Distance :** Prenez des captures d'écran, forcez la synchronisation, videz le cache ou redémarrez le service client à distance.
 *   **Gestion des Groupes :** Organisez les afficheurs par emplacement ou catégorie pour des actions groupées.
-*   **Gestion des Utilisateurs:** Créez et gérez des utilisateurs avec différents rôles (administrateur, éditeur, auteur) pour un contrôle d'accès granulaire. Les mots de passe sont hachés de manière sécurisée à l'aide de bcrypt.
+*   **Gestion des Utilisateurs:** Créez et gérez des utilisateurs avec différents rôles (administrateur, éditeur, auteur, cuisinier) pour un contrôle d'accès granulaire. Les mots de passe sont hachés de manière sécurisée à l'aide de bcrypt.
+
+### Rôles Utilisateurs
+| Rôle | Capacités |
+| :--- | :--- |
+| **Admin** | **Contrôle Total**: Gestion des utilisateurs, paramètres système, sauvegardes, contrôle matériel et contenu. |
+| **Editeur** | **Opérations & Contenu**: Gestion des playlists, agendas, médias et commandes à distance (captures, redémarrage). |
+| **Auteur** | **Création de Contenu**: Accès uniquement à la médiathèque et à l'éditeur de diaporamas. |
+| **Cuisinier**| **Spécialiste Cantine**: Accès dédié à la gestion du menu de la cantine. |
+
 *   **Gestion des Playlists:** Créez, modifiez et supprimez des playlists dynamiques composées de divers types de médias (images, vidéos).
 *   **Gestion des Médias:** Téléchargez et organisez les fichiers multimédias (images, vidéos) à utiliser dans les playlists.
 *   **Gestion des Lecteurs (Players):** Enregistrez, approuvez et attribuez des playlists spécifiques à des unités d'affichage Raspberry Pi individuelles. Surveillez leur statut (dernière connexion).
