@@ -12,7 +12,7 @@
 <p align="center">
   <img src="img/login_omnisign.png" alt="OmniSign Login" width="400"/><br>
   <em>Secure Login Interface</em><br><br>
-  <img src="img/pidyn_editor.jpg" alt="OmniSign Editor" width="800"/><br>
+  <img src="img/omnisign_editor.jpg" alt="OmniSign Editor" width="800"/><br>
   <em>Multi-zone Slideshow Editor</em><br><br>
   <img src="img/mediatheque.jpg" alt="OmniSign Media Library" width="800"/><br>
   <em>Centralized Media Library Management</em>
@@ -133,7 +133,7 @@ This project is licensed under the MIT License.
 <p align="center">
   <img src="img/login_omnisign.png" alt="Connexion OmniSign" width="400"/><br>
   <em>Interface de connexion sécurisée</em><br><br>
-  <img src="img/pidyn_editor.jpg" alt="Éditeur OmniSign" width="800"/><br>
+  <img src="img/omnisign_editor.jpg" alt="Éditeur OmniSign" width="800"/><br>
   <em>Éditeur de diaporamas multi-zones</em><br><br>
   <img src="img/mediatheque.jpg" alt="Médiathèque OmniSign" width="800"/><br>
   <em>Gestion centralisée de la médiathèque</em>
