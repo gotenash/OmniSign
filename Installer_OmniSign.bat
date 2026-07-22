@@ -65,6 +65,15 @@ if %errorlevel% neq 0 (
 )
 
 echo.
+echo [INFO] Initialisation de la base de donnees...
+call node server.js --init-only >nul 2>nul
+
+set ADMIN_PWD=
+if exist "admin_password.txt" (
+    set /p ADMIN_PWD=<admin_password.txt
+)
+
+echo.
 echo [OK] Toutes les dependances ont ete installees avec succes.
 echo.
 
@@ -86,6 +95,19 @@ echo ============================================================
 echo          INSTALLATION DU SERVEUR TERMINÉE !
 echo ============================================================
 echo.
+if defined ADMIN_PWD (
+    echo ============================================================
+    echo             IDENTIFIANTS DE PREMIERE CONNEXION
+    echo.
+    echo   Utilisateur  : admin
+    echo   Mot de passe : %ADMIN_PWD%
+    echo.
+    echo   Note : Ce mot de passe est enregistre dans :
+    echo   %%CD%%\admin_password.txt
+    echo   Veuillez le modifier immediatement apres votre connexion !
+    echo ============================================================
+    echo.
+)
 echo Vous pouvez lancer le serveur a tout moment depuis le raccourci
 echo "OmniSign Serveur" presente sur votre bureau.
 echo.

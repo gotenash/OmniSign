@@ -14,8 +14,20 @@ const jwt = require('jsonwebtoken');
 const knex = require('knex');
 const sqlite3 = require('sqlite3'); // Required by knex for SQLite
 const QRCode = require('qrcode');
+const crypto = require('crypto');
 const execPromise = util.promisify(exec);
 const saltRounds = 10;
+
+function generateStrongPassword(length = 16) {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#*()_+-=';
+    let pwd = '';
+    const bytes = crypto.randomBytes(length);
+    for (let i = 0; i < length; i++) {
+        pwd += chars[bytes[i] % chars.length];
+    }
+    return pwd;
+}
+
 
 // Surcharge de console.log et console.error pour ajouter l'horodatage automatiquement
 const originalLog = console.log;
@@ -131,13 +143,36 @@ async function initializeDatabase() {
             });
             console.log('Table "users" created.');
             // Insert default users
-            const usersToInsert = await Promise.all(defaultData.users.map(async u => ({
-                username: u.username,
-                password: await bcrypt.hash(u.password, saltRounds),
-                role: u.role
-            })));
+            const adminPassword = generateStrongPassword(16);
+            const dbDir = path.dirname(SQLITE_DB_PATH);
+            const pwdFilePath = path.join(dbDir, 'admin_password.txt');
+            fs.writeFileSync(pwdFilePath, adminPassword, 'utf8');
+
+            const usersToInsert = await Promise.all(defaultData.users.map(async u => {
+                const isAdmin = u.role === 'admin';
+                const pwd = isAdmin ? adminPassword : u.password;
+                return {
+                    username: u.username,
+                    password: await bcrypt.hash(pwd, saltRounds),
+                    role: u.role
+                };
+            }));
             await db('users').insert(usersToInsert);
             console.log('Default users inserted.');
+
+            console.log('\n============================================================');
+            console.log('              PREMIER DÉMARRAGE DE OMNISIGN');
+            console.log('              ');
+            console.log('  Un mot de passe administrateur fort a été généré :');
+            console.log('  ');
+            console.log('  Utilisateur : admin');
+            console.log(`  Mot de passe : ${adminPassword}`);
+            console.log('  ');
+            console.log('  Ce mot de passe est enregistré dans :');
+            console.log(`  ${pwdFilePath}`);
+            console.log('  ');
+            console.log('  Veuillez le changer après votre première connexion !');
+            console.log('============================================================\n');
         }
         // Migration : Ajout de la colonne email si elle n'existe pas
         const hasEmail = await db.schema.hasColumn('users', 'email');
@@ -596,6 +631,11 @@ async function loadSettings() {
 initializeDatabase().then(async () => {
     await loadSettings();
     console.log('✅ Base de données prête. JWT_SECRET et API_KEY chargés.');
+    
+    if (process.argv.includes('--init-only')) {
+        console.log('Database initialization complete. Exiting (--init-only)...');
+        process.exit(0);
+    }
     
     // Démarrer le serveur et les tâches de fond UNIQUEMENT quand la DB est prête
     const PORT = process.env.PORT || 3000;

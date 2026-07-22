@@ -64,6 +64,14 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo -e "${GREEN}[INFO] Initialisation de la base de données...${NC}"
+node server.js --init-only
+
+ADMIN_PWD=""
+if [ -f "admin_password.txt" ]; then
+    ADMIN_PWD=$(cat admin_password.txt)
+fi
+
 echo ""
 echo -e "${GREEN}[OK] Toutes les dépendances Node.js ont été installées avec succès.${NC}"
 echo ""
@@ -107,6 +115,19 @@ echo "============================================================"
 echo -e "${GREEN}          INSTALLATION DU SERVEUR TERMINÉE !${NC}"
 echo "============================================================"
 echo ""
+if [ -n "$ADMIN_PWD" ]; then
+    echo -e "  ${YELLOW}============================================================${NC}"
+    echo -e "  ${YELLOW}            IDENTIFIANTS DE PREMIÈRE CONNEXION${NC}"
+    echo -e "  "
+    echo -e "    Utilisateur  : admin"
+    echo -e "    Mot de passe : ${GREEN}${ADMIN_PWD}${NC}"
+    echo -e "  "
+    echo -e "    Note : Ce mot de passe est enregistré dans :"
+    echo -e "    $(pwd)/admin_password.txt"
+    echo -e "    Veuillez le modifier immédiatement après votre connexion !"
+    echo -e "  ${YELLOW}============================================================${NC}"
+    echo ""
+fi
 echo " Vous pouvez lancer le serveur à tout moment en exécutant :"
 echo -e "   ${BLUE}./Lancer_OmniSign.sh${NC}"
 echo " ou depuis le raccourci sur le Bureau."
