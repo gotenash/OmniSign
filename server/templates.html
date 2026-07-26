@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OmniSign - Personnalisation des Modèles</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #2c3e50; color: white; margin: 0; }
+        section { background: #1a252f; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        
+        .workspace-layout {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            align-items: flex-start;
+            min-height: calc(100vh - 180px);
+        }
+        
+        .sidebar-pane {
+            flex: 0.8;
+            background: #1a252f;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-width: 280px;
+            box-sizing: border-box;
+        }
+        
+        .editor-workspace {
+            flex: 1;
+            background: #1a252f;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-sizing: border-box;
+        }
+        
+        .empty-workspace {
+            flex: 1;
+            background: #1a252f;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+        }
+        
+        .templates-list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .template-item {
+            background: #2c3e50;
+            padding: 12px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+        
+        .template-item:hover {
+            background: #34495e;
+            transform: translateX(4px);
+        }
+        
+        .template-item.selected {
+            border-color: #3498db;
+            background: #2980b9;
+        }
+        
+        .template-item.selected:hover {
+            background: #2980b9;
+        }
+        
+        .template-item-name {
+            font-weight: bold;
+            font-size: 14px;
+            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 150px;
+        }
+        
+        .badge {
+            font-size: 10px;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .badge-active {
+            background: #2ecc71;
+            color: white;
+        }
+        
+        .badge-system {
+            background: #95a5a6;
+            color: #1a252f;
+        }
+        
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #34495e;
+            padding-bottom: 15px;
+            margin-bottom: 10px;
+        }
+        
+        .template-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .create-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        
+        .create-btn:hover {
+            background: #2980b9;
+        }
+        
+        .apply-btn {
+            background: #f1c40f;
+            color: #1a252f;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .apply-btn:hover {
+            background: #f39c12;
+        }
+        
+        .apply-btn:disabled {
+            background: #7f8c8d;
+            cursor: not-allowed;
+            color: #bdc3c7;
+        }
+        
+        .delete-btn {
+            background: #e74c3c;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .delete-btn:hover {
+            background: #c0392b;
+        }
+        
+        .delete-btn:disabled {
+            background: #7f8c8d;
+            cursor: not-allowed;
+            display: none;
+        }
+
+        .container {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            align-items: flex-start;
+            width: 100%;
+        }
+        
+        .form-pane {
+            flex: 1.2;
+            background: #2c3e50;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .preview-pane {
+            flex: 1;
+            background: #111a24;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            border-bottom: 2px solid #34495e;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .tab-btn {
+            background: #34495e;
+            color: #bdc3c7;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .tab-btn.active {
+            background: #3498db;
+            color: white;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .form-row > div {
+            flex: 1;
+        }
+        
+        label {
+            display: block;
+            font-size: 13px;
+            color: #bdc3c7;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input, select, textarea {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #34495e;
+            background: #1a252f;
+            color: white;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        
+        textarea {
+            font-family: monospace;
+            resize: vertical;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        button.secondary {
+            background: #7f8c8d;
+        }
+        
+        button.save-btn {
+            background: #27ae60;
+            padding: 12px 25px;
+            font-size: 15px;
+        }
+        
+        /* 16:9 Screen Mockup for live preview */
+        .screen-mockup {
+            width: 480px;
+            height: 270px;
+            background: #000000;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
+            overflow: hidden;
+            border: 4px solid #34495e;
+            border-radius: 4px;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        
+        .screen-mockup .bg-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+        
+        .screen-mockup .content-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            box-sizing: border-box;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            justify-content: center;
+        }
+
+        /* WYSIWYG Editor Styles */
+        .wysiwyg-container {
+            border: 1px solid var(--border-color, #34495e);
+            border-radius: 6px;
+            background: var(--input-bg, #1a252f);
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        .wysiwyg-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 8px;
+            background: var(--bg-secondary, #2c3e50);
+            border-bottom: 1px solid var(--border-color, #34495e);
+            align-items: center;
+        }
+        .wysiwyg-btn {
+            padding: 4px 10px;
+            font-weight: bold;
+            background: var(--input-bg, #1a252f);
+            border: 1px solid var(--border-color, #34495e);
+            border-radius: 4px;
+            color: var(--text-primary, white);
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .wysiwyg-btn:hover {
+            background: var(--accent-color, #3498db) !important;
+            border-color: var(--accent-color, #3498db) !important;
+        }
+        .wysiwyg-separator {
+            width: 1px;
+            height: 20px;
+            background: var(--border-color, #34495e);
+            margin: 0 5px;
+        }
+        .wysiwyg-placeholder-btn {
+            padding: 2px 8px;
+            font-size: 11px;
+            background: var(--bg-tertiary, #24303f);
+            border: 1px solid var(--accent-color, #3498db);
+            border-radius: 4px;
+            color: var(--text-primary, white);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .wysiwyg-placeholder-btn:hover {
+            background: var(--accent-color, #3498db);
+        }
+        .wysiwyg-toggle-btn {
+            margin-left: auto;
+            padding: 4px 8px;
+            background: #e67e22;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .wysiwyg-toggle-btn:hover {
+            background: #d35400;
+        }
+        #wysiwyg-editor {
+            min-height: 180px;
+            max-height: 350px;
+            padding: 12px;
+            color: var(--text-primary, white);
+            background: var(--input-bg, #1a252f);
+            overflow-y: auto;
+            box-sizing: border-box;
+            outline: none;
+        }
+        #wysiwyg-editor, #wysiwyg-editor * {
+            font-size: 14px !important;
+        }
+        #wysiwyg-editor p {
+            margin: 0 0 10px 0;
+        }
+        #cfg-html {
+            border: none !important;
+            border-radius: 0 !important;
+            background: #0c1015 !important;
+            font-family: monospace !important;
+            resize: vertical !important;
+            box-sizing: border-box !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 12px !important;
+            min-height: 180px;
+        }
+
+        /* Styles des Templates pour l'aperçu 1920x1080 */
+        .tpl-container { 
+            width: 100%; height: 100%; color: white; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 9vh; font-family: sans-serif; z-index: 5; 
+            box-sizing: border-box;
+        }
+        .tpl-header { font-size: 5vw; margin-bottom: 4vh; border-bottom: 3px solid #3498db; padding-bottom: 10px; font-weight: bold; width: 80%; text-align: center; }
+        .tpl-content { display: flex; flex-direction: column; gap: 2vh; width: 80%; }
+        .tpl-row { background: rgba(255,255,255,0.1); padding: 2vh; border-radius: 15px; display: flex; align-items: center; justify-content: space-between; }
+        .tpl-label { color: #3498db; font-size: 2vw; width: 30%; text-align: left; font-weight: bold; }
+        .tpl-value { font-size: 3vw; width: 70%; text-align: right; }
+        
+        .tpl-meeting-room { font-size: 8vw; font-weight: bold; margin-bottom: 2vh; text-align: center; }
+        .tpl-meeting-status { font-size: 2vw; padding: 2vh 5vh; border-radius: 30px; display: inline-block; text-align: center; }
+    </style>
+    <link rel="stylesheet" href="/assets/theme.css">
+    <script src="/assets/theme.js"></script>
+</head>
+<body>
+    <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
+        <h1 style="margin: 0; color: #3498db;">OmniSign - Personnalisation des Modèles</h1>
+        <button class="secondary" onclick="logout()">Déconnexion</button>
+    </header>
+
+    <nav id="main-nav" style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <!-- Rempli par JS -->
+    </nav>
+
+    <div class="tab-buttons" style="margin-bottom: 15px;">
+        <button class="tab-btn active" id="tab-canteen" onclick="switchTab('canteen')">🍴 Menu Cantine</button>
+        <button class="tab-btn" id="tab-meeting" onclick="switchTab('meeting')">🏢 Réunions / Planning</button>
+    </div>
+
+    <!-- Barre supérieure : Choix du modèle et Création -->
+    <div style="background: #1a252f; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <label for="template-select" style="margin: 0; font-size: 15px; color: #3498db; font-weight: bold;">Modèle à éditer :</label>
+            <select id="template-select" onchange="selectTemplate(this.value)" style="width: 300px; padding: 8px; font-size: 14px; background: #2c3e50; color: white; border: 1px solid #34495e; border-radius: 4px; cursor: pointer; outline: none;">
+                <!-- Rempli en JS -->
+            </select>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="create-btn" onclick="createNewTemplate()" style="padding: 10px 20px; font-size: 14px;">➕ Créer un modèle personnalisé</button>
+        </div>
+    </div>
+
+    <div class="workspace-layout">
+
+        <!-- Zone d'édition (Formulaire + Aperçu) -->
+        <section class="editor-workspace" id="editor-workspace" style="display: none;">
+            <div class="editor-header">
+                <div class="template-info">
+                    <h2 id="active-template-title" style="margin: 0; font-size: 20px;">Modèle Classique</h2>
+                    <span id="active-template-badges" style="display: flex; gap: 5px;"></span>
+                </div>
+                <div class="action-buttons">
+                    <button class="apply-btn" id="btn-apply-template" onclick="applyTemplate()">⭐ Appliquer</button>
+                    <button class="save-btn" onclick="saveActiveTemplate()">💾 Enregistrer</button>
+                    <button class="delete-btn" id="btn-delete-template" onclick="deleteTemplate()">🗑️ Supprimer</button>
+                </div>
+            </div>
+
+            <div class="container">
+                <!-- Formulaire de configuration -->
+                <div class="form-pane" id="editor-form-container">
+                    <!-- Rempli en JS -->
+                </div>
+
+                <!-- Aperçu en direct -->
+                <div class="preview-pane">
+                    <h3 style="margin-top: 0; margin-bottom: 15px; color: #3498db;">Aperçu 16:9 en direct</h3>
+                    <div class="screen-mockup" id="preview-screen" style="position: relative; overflow: hidden; width: 480px; height: 270px;">
+                        <div id="preview-scaler" style="width: 1920px; height: 1080px; transform: scale(0.25); transform-origin: top left; position: absolute; top: 0; left: 0;">
+                            <img id="preview-bg" class="bg-layer" style="display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; object-fit: cover; z-index: 1;">
+                            <div id="preview-content" class="content-layer" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0; box-sizing: border-box; z-index: 2; display: flex; flex-direction: column; padding: 0; justify-content: flex-start;">
+                                <!-- Rendu dynamique -->
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 15px; font-size: 12px; color: #bdc3c7; text-align: center;">
+                        Cet aperçu simule le rendu final sur les écrans de diffusion.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Message vide -->
+        <div class="empty-workspace" id="empty-workspace">
+            <div style="text-align: center; color: #7f8c8d; padding: 40px;">
+                <div style="font-size: 48px; margin-bottom: 15px;">🎨</div>
+                <h3>Sélectionnez un modèle dans la liste de choix ci-dessus pour l'éditer et l'appliquer.</h3>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('pidyn_token');
+        const role = localStorage.getItem('pidyn_role');
+        if (!token || (role !== 'admin' && role !== 'editor')) {
+            window.location.href = '/';
+        }
+
+        function logout() {
+            localStorage.removeItem('pidyn_token');
+            localStorage.removeItem('pidyn_role');
+            localStorage.removeItem('pidyn_username');
+            localStorage.removeItem('pidyn_siteId');
+            window.location.href = '/';
+        }
+
+        let currentTab = 'canteen';
+        let availableMedia = [];
+        let activeConfig = {};
+        let allTemplates = [];
+        let selectedTemplateId = null;
+        
+        // Configuration de base par défaut
+        const defaultConfigs = {
+            canteen: {
+                backgroundColor: '#1a252f',
+                backgroundUrl: '',
+                fontFamily: 'sans-serif',
+                titleColor: '#3498db',
+                titleFontSize: '32',
+                textColor: '#ffffff',
+                textFontSize: '20',
+                borderStyle: 'none',
+                borderColor: '#3498db',
+                borderWidth: '0',
+                borderRadius: '8',
+                customCss: '',
+                customHtml: ''
+            },
+            meeting: {
+                backgroundColor: '#1a252f',
+                backgroundUrl: '',
+                fontFamily: 'sans-serif',
+                titleColor: '#ffffff',
+                titleFontSize: '36',
+                textColor: '#bdc3c7',
+                textFontSize: '22',
+                badgeBgAvailable: '#27ae60',
+                badgeBgBusy: '#e74c3c',
+                borderStyle: 'none',
+                borderColor: '#3498db',
+                borderWidth: '0',
+                borderRadius: '8',
+                customCss: '',
+                customHtml: ''
+            }
+        };
+
+        async function init() {
+            // Construire la barre de navigation
+            const nav = document.getElementById('main-nav');
+            let html = `<button class="secondary" onclick="window.location.href='/'">📊 Accueil</button>`;
+            html += `<button class="secondary" onclick="window.location.href='/ecrans'">🖥 Écrans</button>`;
+            html += `<button class="secondary" onclick="window.location.href='/diaporamas'">🎞 Diaporamas</button>`;
+            html += `<button class="secondary" onclick="window.location.href='/planning'">📅 Planning</button>`;
+            html += `<button class="secondary" onclick="window.location.href='/canteen'">🍴 Cantine</button>`;
+            html += `<button class="secondary" onclick="window.location.href='/meetings'">🏢 Réunions</button>`;
+            html += `<button class="secondary" onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>`;
+            if (role === 'admin') {
+                html += `<button class="secondary" onclick="window.location.href='/users'">👥 Utilisateurs</button>`;
+                html += `<button class="secondary" onclick="window.location.href='/sites'">🏢 Sites</button>`;
+                html += `<button class="secondary" onclick="window.location.href='/systeme'">⚙️ Système</button>`;
+            }
+            html += `<button onclick="window.location.href='/templates'">🎨 Modèles</button>`;
+            nav.innerHTML = html;
+
+            // Charger les médias de la médiathèque
+            const headers = { 'Authorization': `Bearer ${token}` };
+            try {
+                const res = await fetch('/api/admin/media', { headers });
+                if (res.ok) availableMedia = await res.json();
+            } catch (err) {
+                console.error("Erreur de chargement des médias:", err);
+            }
+
+            // Charger tous les modèles
+            await reloadAllTemplates();
+            
+            // Sélectionner le modèle actif par défaut
+            selectActiveTemplateForTab();
+        }
+
+        async function reloadAllTemplates() {
+            const headers = { 'Authorization': `Bearer ${token}` };
+            try {
+                const res = await fetch('/api/admin/templates', { headers });
+                if (res.ok) {
+                    allTemplates = await res.json();
+                } else {
+                    console.error("Erreur API templates");
+                }
+            } catch (err) {
+                console.error("Erreur réseau templates:", err);
+            }
+            renderTemplatesList();
+        }
+
+        function renderTemplatesList() {
+            const selectEl = document.getElementById('template-select');
+            if (!selectEl) return;
+            selectEl.innerHTML = '';
+            
+            const filtered = allTemplates.filter(t => t.templateType === currentTab);
+            
+            if (filtered.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = "";
+                opt.innerText = "Aucun modèle disponible";
+                opt.disabled = true;
+                opt.selected = true;
+                selectEl.appendChild(opt);
+                return;
+            }
+            
+            filtered.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.selected = (selectedTemplateId === t.id);
+                
+                let label = t.name;
+                if (t.isActive) label += ' (Actif)';
+                if (t.isSystem) label += ' [Système]';
+                
+                opt.innerText = label;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        function selectActiveTemplateForTab() {
+            const active = allTemplates.find(t => t.templateType === currentTab && t.isActive);
+            if (active) {
+                selectTemplate(active.id);
+            } else {
+                const first = allTemplates.find(t => t.templateType === currentTab);
+                if (first) {
+                    selectTemplate(first.id);
+                } else {
+                    selectedTemplateId = null;
+                    document.getElementById('editor-workspace').style.display = 'none';
+                    document.getElementById('empty-workspace').style.display = 'flex';
+                }
+            }
+        }
+
+        function selectTemplate(id) {
+            const template = allTemplates.find(t => t.id === id);
+            if (!template) return;
+            
+            selectedTemplateId = id;
+            activeConfig = Object.assign({}, defaultConfigs[currentTab], template.config || {});
+            
+            document.getElementById('empty-workspace').style.display = 'none';
+            document.getElementById('editor-workspace').style.display = 'flex';
+            
+            const titleEl = document.getElementById('active-template-title');
+            if (template.isSystem) {
+                titleEl.innerHTML = template.name;
+            } else {
+                titleEl.innerHTML = `${template.name} <button class="create-btn" style="padding: 2px 6px; font-size: 10px; margin-left: 10px;" onclick="renameTemplate('${template.id}')">✏️</button>`;
+            }
+            
+            const badgesEl = document.getElementById('active-template-badges');
+            badgesEl.innerHTML = '';
+            if (template.isActive) {
+                badgesEl.innerHTML += `<span class="badge badge-active">Actif</span>`;
+            }
+            if (template.isSystem) {
+                badgesEl.innerHTML += `<span class="badge badge-system">Système</span>`;
+            }
+            
+            const btnApply = document.getElementById('btn-apply-template');
+            btnApply.disabled = template.isActive;
+            btnApply.innerText = template.isActive ? '⭐ Actif' : '⭐ Appliquer';
+            
+            const btnDelete = document.getElementById('btn-delete-template');
+            if (template.isSystem) {
+                btnDelete.style.display = 'none';
+            } else {
+                btnDelete.style.display = 'block';
+            }
+            
+            const selectEl = document.getElementById('template-select');
+            if (selectEl && selectEl.value !== id) {
+                selectEl.value = id;
+            }
+            
+            renderForm();
+            updatePreview();
+        }
+
+        async function createNewTemplate() {
+            const name = prompt("Nom du nouveau modèle personnalisé :");
+            if (!name || !name.trim()) return;
+            
+            const headers = { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            };
+            
+            const defaultConfig = defaultConfigs[currentTab];
+            
+            try {
+                const res = await fetch('/api/admin/templates', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({
+                        name: name.trim(),
+                        templateType: currentTab,
+                        config: defaultConfig
+                    })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    await reloadAllTemplates();
+                    selectTemplate(data.templateId);
+                } else {
+                    const err = await res.text();
+                    alert("Erreur lors de la création : " + err);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Erreur réseau.");
+            }
+        }
+
+        async function renameTemplate(id) {
+            const template = allTemplates.find(t => t.id === id);
+            if (!template || template.isSystem) return;
+            
+            const newName = prompt("Nouveau nom pour ce modèle :", template.name);
+            if (!newName || !newName.trim() || newName === template.name) return;
+            
+            const headers = { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            };
+            
+            try {
+                const res = await fetch(`/api/admin/templates/${id}`, {
+                    method: 'PUT',
+                    headers: headers,
+                    body: JSON.stringify({ name: newName.trim() })
+                });
+                
+                if (res.ok) {
+                    await reloadAllTemplates();
+                    selectTemplate(id);
+                } else {
+                    const err = await res.text();
+                    alert("Erreur : " + err);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Erreur réseau.");
+            }
+        }
+
+        async function applyTemplate() {
+            if (!selectedTemplateId) return;
+            const headers = { 
+                'Authorization': `Bearer ${token}` 
+            };
+            
+            try {
+                const res = await fetch(`/api/admin/templates/${selectedTemplateId}/apply`, {
+                    method: 'POST',
+                    headers: headers
+                });
+                
+                if (res.ok) {
+                    alert("Modèle appliqué avec succès !");
+                    await reloadAllTemplates();
+                    selectTemplate(selectedTemplateId);
+                } else {
+                    const err = await res.text();
+                    alert("Erreur d'application : " + err);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Erreur réseau.");
+            }
+        }
+
+        async function deleteTemplate() {
+            if (!selectedTemplateId) return;
+            const template = allTemplates.find(t => t.id === selectedTemplateId);
+            if (!template || template.isSystem) return;
+            
+            if (!confirm(`Êtes-vous sûr de vouloir supprimer le modèle "${template.name}" ?`)) return;
+            
+            const headers = { 
+                'Authorization': `Bearer ${token}` 
+            };
+            
+            try {
+                const res = await fetch(`/api/admin/templates/${selectedTemplateId}`, {
+                    method: 'DELETE',
+                    headers: headers
+                });
+                
+                if (res.ok) {
+                    alert("Modèle supprimé avec succès.");
+                    selectedTemplateId = null;
+                    await reloadAllTemplates();
+                    selectActiveTemplateForTab();
+                } else {
+                    const err = await res.text();
+                    alert("Erreur de suppression : " + err);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Erreur réseau.");
+            }
+        }
+
+        let wysiwygVisualMode = true;
+
+        function applyStyleToSelection(styleName, styleValue) {
+            const editor = document.getElementById('wysiwyg-editor');
+            if (!editor) return;
+
+            // Garder ou forcer le focus sur l'éditeur
+            editor.focus();
+
+            const sel = window.getSelection();
+            if (!sel.rangeCount) return;
+            const range = sel.getRangeAt(0);
+
+            // Si la sélection est vide, on ne fait rien
+            if (range.collapsed) return;
+
+            // S'assurer que la sélection est bien à l'intérieur de l'éditeur
+            if (!editor.contains(range.commonAncestorContainer)) {
+                return;
+            }
+
+            const span = document.createElement('span');
+            span.style[styleName] = styleValue;
+
+            try {
+                span.appendChild(range.extractContents());
+                range.insertNode(span);
+                
+                // Recréer la sélection autour du nouveau span pour confort utilisateur
+                sel.removeAllRanges();
+                const newRange = document.createRange();
+                newRange.selectNodeContents(span);
+                sel.addRange(newRange);
+            } catch (e) {
+                console.error("Erreur lors de l'application du style :", e);
+            }
+            syncEditorToTextarea();
+        }
+
+        function getWysiwygMarkup(placeholders, customFonts = []) {
+            const pillsHtml = placeholders.map(p => `
+                <button type="button" class="wysiwyg-placeholder-btn" onmousedown="event.preventDefault()" onclick="insertPlaceholder('${p}')" title="Insérer ce tag">${p}</button>
+            `).join('');
+
+            let fontOptionsHtml = `
+                <option value="sans-serif">Sans-serif (Défaut)</option>
+                <option value="serif">Serif</option>
+                <option value="monospace">Monospace</option>
+            `;
+            customFonts.forEach(f => {
+                const fontName = `font-${f.id}`;
+                fontOptionsHtml += `<option value="${fontName}">${f.filename}</option>`;
+            });
+
+            return `
+                <div class="wysiwyg-container">
+                    <div class="wysiwyg-toolbar" style="gap: 6px;">
+                        <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execCmd('bold')" title="Gras">B</button>
+                        <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execCmd('italic')" title="Italique">I</button>
+                        <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execCmd('underline')" title="Souligné">U</button>
+                        <div class="wysiwyg-separator"></div>
+                        <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execCmd('justifyLeft')" title="Aligner à gauche">⬅️</button>
+                        <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execCmd('justifyCenter')" title="Centrer">↔️</button>
+                        <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execCmd('justifyRight')" title="Aligner à droite">➡️</button>
+                        <div class="wysiwyg-separator"></div>
+                        
+                        <select onchange="applyStyleToSelection('fontFamily', this.value); this.selectedIndex = 0;" style="width: 90px; padding: 2px; font-size: 11px; background: #1a252f; color: white; border: 1px solid #34495e; border-radius: 4px;">
+                            <option value="" disabled selected>Police...</option>
+                            ${fontOptionsHtml}
+                        </select>
+                        
+                        <select onchange="applyStyleToSelection('fontSize', this.value + 'px'); this.selectedIndex = 0;" style="width: 80px; padding: 2px; font-size: 11px; background: #1a252f; color: white; border: 1px solid #34495e; border-radius: 4px;">
+                            <option value="" disabled selected>Taille...</option>
+                            <option value="12">12 px</option>
+                            <option value="14">14 px</option>
+                            <option value="16">16 px</option>
+                            <option value="18">18 px</option>
+                            <option value="20">20 px</option>
+                            <option value="24">24 px</option>
+                            <option value="28">28 px</option>
+                            <option value="32">32 px</option>
+                            <option value="36">36 px</option>
+                            <option value="40">40 px</option>
+                            <option value="48">48 px</option>
+                            <option value="60">60 px</option>
+                            <option value="72">72 px</option>
+                        </select>
+                        
+                        <div style="display: flex; align-items: center; gap: 4px; background: #1a252f; border: 1px solid #34495e; padding: 1px 4px; border-radius: 4px;">
+                            <span style="font-size: 10px; color: #bdc3c7;">Coul :</span>
+                            <input type="color" onchange="applyStyleToSelection('color', this.value)" style="width: 20px; height: 16px; padding: 0; border: none; cursor: pointer; background: transparent;">
+                        </div>
+                        
+                        <select onchange="insertPlaceholder(this.value); this.selectedIndex = 0;" style="width: 80px; padding: 2px; font-size: 11px; background: #1a252f; color: white; border: 1px solid #34495e; border-radius: 4px;">
+                            <option value="" disabled selected>Émoji...</option>
+                            <optgroup label="Alimentation">
+                                <option value="🍴">🍴 Couverts</option>
+                                <option value="🥗">🥗 Salade</option>
+                                <option value="🍲">🍲 Soupe</option>
+                                <option value="🍕">🍕 Pizza</option>
+                                <option value="🥩">🥩 Viande</option>
+                                <option value="🍝">🍝 Pâtes</option>
+                                <option value="🍰">🍰 Gâteau</option>
+                                <option value="🍏">🍏 Pomme</option>
+                                <option value="🥐">🥐 Croissant</option>
+                                <option value="🐟">🐟 Poisson</option>
+                                <option value="🧀">🧀 Fromage</option>
+                                <option value="🍓">🍓 Fraise</option>
+                                <option value="☕">☕ Café</option>
+                            </optgroup>
+                            <optgroup label="Bureau & Réunion">
+                                <option value="🏢">🏢 Bureau</option>
+                                <option value="📅">📅 Calendrier</option>
+                                <option value="⏱️">⏱️ Chrono</option>
+                                <option value="👥">👥 Groupe</option>
+                                <option value="💬">💬 Bulle</option>
+                                <option value="💻">💻 Ordinateur</option>
+                                <option value="💡">💡 Idée</option>
+                                <option value="📢">📢 Mégaphone</option>
+                                <option value="📌">📌 Épingle</option>
+                                <option value="📝">📝 Note</option>
+                            </optgroup>
+                            <optgroup label="Symboles & Alertes">
+                                <option value="🚨">🚨 Alerte</option>
+                                <option value="⚠️">⚠️ Attention</option>
+                                <option value="ℹ️">ℹ️ Info</option>
+                                <option value="✅">✅ Validé</option>
+                                <option value="❌">❌ Annulé</option>
+                                <option value="⭐">⭐ Étoile</option>
+                                <option value="🚀">🚀 Fusée</option>
+                                <option value="✨">✨ Étoiles</option>
+                                <option value="🔔">🔔 Cloche</option>
+                                <option value="🎉">🎉 Fête</option>
+                            </optgroup>
+                        </select>
+                        
+                        <div class="wysiwyg-separator"></div>
+                        <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execCmd('removeFormat')" title="Effacer la mise en forme">🧹</button>
+                        <div class="wysiwyg-separator"></div>
+                        <span style="font-size: 12px; color: #bdc3c7; margin-right: 5px;">Ajouter tag :</span>
+                        <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                            ${pillsHtml}
+                        </div>
+                        <button type="button" class="wysiwyg-toggle-btn" onclick="toggleWysiwygMode()" id="wysiwyg-toggle-mode">Voir code HTML</button>
+                    </div>
+                    <div id="wysiwyg-editor" contenteditable="true" oninput="syncEditorToTextarea()" onpaste="event.preventDefault(); const text = (event.clipboardData || window.clipboardData).getData('text/plain'); document.execCommand('insertText', false, text);"></div>
+                    <textarea id="cfg-html" rows="6" placeholder="Placeholders supportés: ${placeholders.join(', ')}" oninput="syncTextareaToEditor(this.value)" style="display: none;"></textarea>
+                </div>
+            `;
+        }
+
+        function execCmd(cmd, val = null) {
+            document.execCommand(cmd, false, val);
+            syncEditorToTextarea();
+        }
+
+        function insertTextAtCursor(text) {
+            let sel, range;
+            if (window.getSelection) {
+                sel = window.getSelection();
+                if (sel.getRangeAt && sel.rangeCount) {
+                    range = sel.getRangeAt(0);
+                    range.deleteContents();
+                    const textNode = document.createTextNode(text);
+                    range.insertNode(textNode);
+                    // Placer le curseur après le texte inséré
+                    range.setStartAfter(textNode);
+                    range.setEndAfter(textNode);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                }
+            }
+        }
+
+        function insertPlaceholder(placeholder) {
+            if (wysiwygVisualMode) {
+                const editor = document.getElementById('wysiwyg-editor');
+                if (!editor) return;
+                editor.focus();
+                insertTextAtCursor(placeholder);
+                syncEditorToTextarea();
+            } else {
+                const textarea = document.getElementById('cfg-html');
+                if (!textarea) return;
+                textarea.focus();
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const val = textarea.value;
+                textarea.value = val.substring(0, start) + placeholder + val.substring(end);
+                textarea.selectionStart = textarea.selectionEnd = start + placeholder.length;
+                syncTextareaToEditor(textarea.value);
+            }
+        }
+
+        function syncEditorToTextarea() {
+            const editor = document.getElementById('wysiwyg-editor');
+            const textarea = document.getElementById('cfg-html');
+            if (editor && textarea) {
+                const htmlValue = editor.innerHTML;
+                textarea.value = htmlValue;
+                updateConfigValue('customHtml', htmlValue);
+            }
+        }
+
+        function syncTextareaToEditor(val) {
+            const editor = document.getElementById('wysiwyg-editor');
+            if (editor) {
+                editor.innerHTML = val;
+            }
+            updateConfigValue('customHtml', val);
+        }
+
+        function toggleWysiwygMode() {
+            const editor = document.getElementById('wysiwyg-editor');
+            const textarea = document.getElementById('cfg-html');
+            const btn = document.getElementById('wysiwyg-toggle-mode');
+            if (!editor || !textarea || !btn) return;
+
+            if (wysiwygVisualMode) {
+                editor.style.display = 'none';
+                textarea.style.display = 'block';
+                textarea.focus();
+                btn.innerText = 'Éditeur Visuel';
+                wysiwygVisualMode = false;
+            } else {
+                editor.style.display = 'block';
+                textarea.style.display = 'none';
+                editor.focus();
+                btn.innerText = 'Voir code HTML';
+                wysiwygVisualMode = true;
+            }
+        }
+
+        function renderForm() {
+            const container = document.getElementById('editor-form-container');
+            const images = availableMedia.filter(m => m.type === 'image');
+            const fonts = availableMedia.filter(m => m.type === 'font');
+            
+            let bgOptions = '<option value="">Aucune image (Couleur unie)</option>';
+            bgOptions += images.map(img => `<option value="${img.url}" ${activeConfig.backgroundUrl === img.url ? 'selected' : ''}>${img.filename}</option>`).join('');
+
+            let fontOptions = '<option value="sans-serif">Sans-serif (Défaut)</option>';
+            fontOptions += '<option value="serif" ' + (activeConfig.fontFamily === 'serif' ? 'selected' : '') + '>Serif</option>';
+            fontOptions += '<option value="monospace" ' + (activeConfig.fontFamily === 'monospace' ? 'selected' : '') + '>Monospace</option>';
+            
+            // Injecter les polices personnalisées
+            fonts.forEach(f => {
+                const fontName = `font-${f.id}`;
+                fontOptions += `<option value="${fontName}" ${activeConfig.fontFamily === fontName ? 'selected' : ''}>${f.filename} (Médiathèque)</option>`;
+                
+                // Injecter le style CSS dans l'en-tête pour le rendu correct
+                const styleId = `font-style-${f.id}`;
+                if (!document.getElementById(styleId)) {
+                    const style = document.createElement('style');
+                    style.id = styleId;
+                    style.textContent = `@font-face { font-family: "${fontName}"; src: url("${f.url}?token=${token}"); }`;
+                    document.head.appendChild(style);
+                }
+            });
+
+            if (currentTab === 'canteen') {
+                container.innerHTML = `
+                    <div class="form-row">
+                        <div>
+                            <label>Couleur d'arrière-plan</label>
+                            <input type="color" id="cfg-bgColor" value="${activeConfig.backgroundColor}" oninput="updateConfigValue('backgroundColor', this.value)">
+                        </div>
+                        <div>
+                            <label>Image d'arrière-plan</label>
+                            <select id="cfg-bgUrl" onchange="updateConfigValue('backgroundUrl', this.value)">${bgOptions}</select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Structure HTML (Éditeur Visuel / WYSIWYG)</label>
+                        ${getWysiwygMarkup(['{{title}}', '{{day}}', '{{starter}}', '{{main}}', '{{dessert}}'], fonts)}
+                        <div style="font-size: 11px; color: #95a5a6; margin-top: 6px;">
+                            Laissez vide pour conserver la structure par défaut d'OmniSign.
+                        </div>
+                    </div>
+                `;
+            } else if (currentTab === 'meeting') {
+                container.innerHTML = `
+                    <div class="form-row">
+                        <div>
+                            <label>Couleur d'arrière-plan</label>
+                            <input type="color" id="cfg-bgColor" value="${activeConfig.backgroundColor}" oninput="updateConfigValue('backgroundColor', this.value)">
+                        </div>
+                        <div>
+                            <label>Image d'arrière-plan</label>
+                            <select id="cfg-bgUrl" onchange="updateConfigValue('backgroundUrl', this.value)">${bgOptions}</select>
+                        </div>
+                    </div>
+
+                    <h3 style="border-bottom: 1px dashed #34495e; padding-bottom: 5px; color: #2ecc71; font-size: 16px;">Badges de Statut</h3>
+                    <div class="form-row">
+                        <div>
+                            <label>Fond Badge - Salle Disponible</label>
+                            <input type="color" id="cfg-badgeAvailable" value="${activeConfig.badgeBgAvailable || '#27ae60'}" oninput="updateConfigValue('badgeBgAvailable', this.value)">
+                        </div>
+                        <div>
+                            <label>Fond Badge - Salle Occupée</label>
+                            <input type="color" id="cfg-badgeBusy" value="${activeConfig.badgeBgBusy || '#e74c3c'}" oninput="updateConfigValue('badgeBgBusy', this.value)">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Structure HTML (Éditeur Visuel / WYSIWYG)</label>
+                        ${getWysiwygMarkup(['{{room}}', '{{subject}}', '{{status}}', '{{startTime}}', '{{endTime}}'], fonts)}
+                        <div style="font-size: 11px; color: #95a5a6; margin-top: 6px;">
+                            Laissez vide pour conserver la structure par défaut d'OmniSign.
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Initialiser le contenu de l'éditeur WYSIWYG
+            wysiwygVisualMode = true;
+            const editor = document.getElementById('wysiwyg-editor');
+            const textarea = document.getElementById('cfg-html');
+            if (editor && textarea) {
+                editor.innerHTML = activeConfig.customHtml || '';
+                textarea.value = activeConfig.customHtml || '';
+            }
+        }
+
+        function updateConfigValue(key, val) {
+            activeConfig[key] = val;
+            updatePreview();
+        }
+
+        function updatePreview() {
+            const screen = document.getElementById('preview-screen');
+            const bgImg = document.getElementById('preview-bg');
+            const content = document.getElementById('preview-content');
+
+            // 1. Fond
+            screen.style.backgroundColor = activeConfig.backgroundColor || '#000000';
+            if (activeConfig.backgroundUrl) {
+                bgImg.src = activeConfig.backgroundUrl + "?token=" + token;
+                bgImg.style.display = 'block';
+            } else {
+                bgImg.style.display = 'none';
+            }
+
+            // 2. Police globale
+            let resolvedFont = activeConfig.fontFamily;
+            if (resolvedFont && resolvedFont.startsWith('font-')) {
+                content.style.fontFamily = `"${resolvedFont}", sans-serif`;
+            } else {
+                content.style.fontFamily = resolvedFont || 'sans-serif';
+            }
+
+            // Supprimer d'anciennes surcharges CSS d'aperçu
+            const oldStyles = document.getElementById('custom-preview-styles');
+            if (oldStyles) oldStyles.remove();
+
+            // Surcharge CSS personnalisée
+            if (activeConfig.customCss) {
+                const style = document.createElement('style');
+                style.id = 'custom-preview-styles';
+                style.textContent = activeConfig.customCss.replace(/([^\r\n,{}]+)(,(?=[^}]*{)|(?=[^{]*{))/g, '#preview-screen $1$2');
+                document.head.appendChild(style);
+            }
+
+            // Appliquer les styles généraux du template sur content
+            if (activeConfig.borderStyle && activeConfig.borderStyle !== 'none') {
+                content.style.border = `${activeConfig.borderWidth || 0}px ${activeConfig.borderStyle} ${activeConfig.borderColor || 'transparent'}`;
+            } else {
+                content.style.border = 'none';
+            }
+            if (activeConfig.borderRadius) {
+                content.style.borderRadius = `${activeConfig.borderRadius}px`;
+            } else {
+                content.style.borderRadius = '0';
+            }
+            // Ajouter la classe tpl-container
+            content.className = 'content-layer tpl-container';
+
+            // 3. HTML / Rendu
+            if (activeConfig.customHtml) {
+                let html = activeConfig.customHtml;
+                if (currentTab === 'canteen') {
+                    html = html.replace(/{{title}}/g, 'MENU CANTINE')
+                               .replace(/{{day}}/g, 'Mardi')
+                               .replace(/{{starter}}/g, 'Salade de tomates fraîches')
+                               .replace(/{{main}}/g, 'Lasagnes bolognaises faites maison')
+                               .replace(/{{dessert}}/g, 'Tarte aux pommes dorée');
+                } else {
+                    html = html.replace(/{{room}}/g, 'Salle Cézanne')
+                               .replace(/{{subject}}/g, 'Conseil d\'administration')
+                               .replace(/{{status}}/g, 'Occupée')
+                               .replace(/{{startTime}}/g, '14:30')
+                               .replace(/{{endTime}}/g, '16:00');
+                }
+                content.innerHTML = html;
+            } else {
+                // Rendu PREMIUM identique aux players, à l'échelle 1920x1080 réelle
+                const titleColor = activeConfig.titleColor || '#3498db';
+                const titleSize = activeConfig.titleFontSize ? `${activeConfig.titleFontSize}px` : '5vw';
+                const textColor = activeConfig.textColor || '#ffffff';
+                const textSize = activeConfig.textFontSize ? `${activeConfig.textFontSize}px` : '3vw';
+
+                if (currentTab === 'canteen') {
+                    const labelColor = activeConfig.titleColor || '#3498db';
+                    const labelSize = activeConfig.textFontSize ? `${parseInt(activeConfig.textFontSize) * 0.8}px` : '2vw';
+
+                    content.innerHTML = `
+                        <div class="tpl-header" style="color:${titleColor}; font-size:${titleSize}; border-bottom-color:${titleColor};">MENU CANTINE (Mardi)</div>
+                        <div class="tpl-content">
+                            <div class="tpl-row" style="color:${textColor};">
+                                <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">ENTRÉE</div>
+                                <div class="tpl-value" style="font-size:${textSize};">Salade de tomates fraîches</div>
+                            </div>
+                            <div class="tpl-row" style="color:${textColor};">
+                                <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">PLAT</div>
+                                <div class="tpl-value" style="font-size:${textSize};">Lasagnes bolognaises faites maison</div>
+                            </div>
+                            <div class="tpl-row" style="color:${textColor};">
+                                <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">DESSERT</div>
+                                <div class="tpl-value" style="font-size:${textSize};">Tarte aux pommes dorée</div>
+                            </div>
+                        </div>
+                    `;
+                } else if (currentTab === 'meeting') {
+                    const badgeBg = activeConfig.badgeBgBusy || '#e74c3c';
+                    const subTextSize = activeConfig.textFontSize ? `${parseInt(activeConfig.textFontSize) * 0.7}px` : '2vw';
+
+                    content.innerHTML = `
+                        <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">Salle Cézanne</div>
+                        <div style="font-size:${textSize}; font-weight: bold; margin: 2vh 0; color:${textColor};">Conseil d'administration</div>
+                        <div style="font-size:${subTextSize}; opacity: 0.8; margin-bottom: 4vh; color:${textColor};">⏱️ 14:30 - 16:00</div>
+                        <div class="tpl-meeting-status" style="background:${badgeBg}; color:white; padding: 2vh 5vh; font-size: ${subTextSize}; border-radius: 30px; display: inline-block;">OCCUPÉE</div>
+                    `;
+                }
+            }
+        }
+
+        async function saveActiveTemplate() {
+            if (!selectedTemplateId) return;
+            const headers = { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            };
+            
+            try {
+                const res = await fetch(`/api/admin/templates/${selectedTemplateId}`, {
+                    method: 'PUT',
+                    headers: headers,
+                    body: JSON.stringify({ config: activeConfig })
+                });
+
+                if (res.ok) {
+                    alert('Modèle enregistré avec succès !');
+                    await reloadAllTemplates();
+                    selectTemplate(selectedTemplateId);
+                } else {
+                    const err = await res.text();
+                    alert('Erreur de sauvegarde: ' + err);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Erreur réseau lors de la sauvegarde.');
+            }
+        }
+
+        function switchTab(tab) {
+            if (currentTab === tab) return;
+            
+            document.getElementById(`tab-${currentTab}`).classList.remove('active');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            
+            currentTab = tab;
+            selectedTemplateId = null;
+            
+            renderTemplatesList();
+            selectActiveTemplateForTab();
+        }
+
+        init();
+    </script>
+</body>
+</html>

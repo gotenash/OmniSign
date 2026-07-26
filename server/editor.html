@@ -368,6 +368,94 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* Style de surbrillance de sélection de texte personnalisé et ultra-lisible */
+        #preview-screen *::selection {
+            background-color: #3498db !important;
+            color: #ffffff !important;
+        }
+        #preview-screen *::-moz-selection {
+            background-color: #3498db !important;
+            color: #ffffff !important;
+        }
+
+        /* WYSIWYG Editor Styles */
+        .wysiwyg-container {
+            border: 1px solid var(--border-color, #34495e);
+            border-radius: 6px;
+            background: var(--input-bg, #1a252f);
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        .wysiwyg-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 8px;
+            background: var(--bg-secondary, #2c3e50);
+            border-bottom: 1px solid var(--border-color, #34495e);
+            align-items: center;
+        }
+        .wysiwyg-btn {
+            padding: 4px 10px;
+            font-weight: bold;
+            background: var(--input-bg, #1a252f);
+            border: 1px solid var(--border-color, #34495e);
+            border-radius: 4px;
+            color: var(--text-primary, white);
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .wysiwyg-btn:hover {
+            background: var(--accent-color, #3498db) !important;
+            border-color: var(--accent-color, #3498db) !important;
+        }
+        .wysiwyg-separator {
+            width: 1px;
+            height: 20px;
+            background: var(--border-color, #34495e);
+            margin: 0 5px;
+        }
+        .wysiwyg-toggle-btn {
+            margin-left: auto;
+            padding: 4px 8px;
+            background: #e67e22;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .wysiwyg-toggle-btn:hover {
+            background: #d35400;
+        }
+        #z-paragraph-editor {
+            min-height: 120px;
+            max-height: 250px;
+            padding: 8px;
+            color: var(--text-primary, white);
+            background: var(--input-bg, #1a252f);
+            overflow-y: auto;
+            box-sizing: border-box;
+            outline: none;
+        }
+        #z-paragraph-editor p {
+            margin: 0 0 10px 0;
+        }
+        #z-paragraph-html {
+            border: none !important;
+            border-radius: 0 !important;
+            background: #0c1015 !important;
+            font-family: monospace !important;
+            resize: vertical !important;
+            box-sizing: border-box !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 12px !important;
+            min-height: 120px;
+        }
     </style>
     <link rel="stylesheet" href="/assets/theme.css">
     <script src="/assets/theme.js"></script>
@@ -460,14 +548,42 @@
                         <option value="web">Web / Sozi (HTML)</option>
                         <option value="clock">Horloge</option>
                         <option value="text">Texte</option>
+                        <option value="paragraph">Paragraphe (Texte riche)</option>
                         <option value="qrcode">Code QR</option>
                     </select>
 
                     <label id="z-content-label">Média / Texte</label>
                     <div id="z-content-container">
                         <select id="z-url" onchange="updateZone()"></select>
+                        <div id="z-upload-container" style="display: none; margin-bottom: 10px;">
+                            <input type="file" id="z-upload-file" style="display: none;" onchange="uploadMediaFromEditor()">
+                            <button type="button" id="z-upload-btn" onclick="document.getElementById('z-upload-file').click()" style="width: 100%; padding: 8px; background: #27ae60; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;" title="Charger un fichier image ou vidéo directement">
+                                ➕ Charger un média
+                            </button>
+                        </div>
                         <input type="text" id="z-web-url" oninput="updateZone()" style="display:none;" placeholder="Adresse web (https://...) ou chemin local">
                         <input type="text" id="z-text" oninput="updateZone()" style="display:none;" placeholder="Votre texte ici...">
+                        
+                        <!-- WYSIWYG Editor Container for Paragraph -->
+                        <div id="z-paragraph-container" style="display:none; margin-top: 10px;">
+                            <div class="wysiwyg-container">
+                                <div class="wysiwyg-toolbar">
+                                    <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execParagraphCmd('bold')" title="Gras">B</button>
+                                    <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execParagraphCmd('italic')" title="Italique">I</button>
+                                    <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execParagraphCmd('underline')" title="Souligné">U</button>
+                                    <div class="wysiwyg-separator"></div>
+                                    <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execParagraphCmd('justifyLeft')" title="Aligner à gauche">⬅️</button>
+                                    <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execParagraphCmd('justifyCenter')" title="Centrer">↔️</button>
+                                    <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execParagraphCmd('justifyRight')" title="Aligner à droite">➡️</button>
+                                    <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execParagraphCmd('justifyFull')" title="Justifier">☵</button>
+                                    <div class="wysiwyg-separator"></div>
+                                    <button type="button" class="wysiwyg-btn" onmousedown="event.preventDefault()" onclick="execParagraphCmd('removeFormat')" title="Effacer la mise en forme">🧹</button>
+                                    <button type="button" class="wysiwyg-toggle-btn" onclick="toggleParagraphWysiwygMode()" id="z-paragraph-toggle-mode" style="margin-left: auto;">Voir code</button>
+                                </div>
+                                <div id="z-paragraph-editor" contenteditable="true" oninput="syncParagraphEditorToTextarea()" onpaste="event.preventDefault(); const text = (event.clipboardData || window.clipboardData).getData('text/plain'); document.execCommand('insertText', false, text);"></div>
+                                <textarea id="z-paragraph-html" rows="6" oninput="syncParagraphTextareaToEditor(this.value)" style="display: none;"></textarea>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Propriétés spécifiques aux zones Web / Iframe -->
@@ -642,6 +758,7 @@
         let selectedIndex = -1;
         let selectedZoneIndex = -1; 
         let availableMedia = [];
+        let activeCustomTemplates = {};
         
         let mode = 'none'; 
         let useGrid = true;
@@ -766,6 +883,15 @@
                     return;
                 }
             }
+            // Charger les modèles personnalisés du site
+            const currentSiteId = playlistData.siteId || localStorage.getItem('pidyn_siteId') || '';
+            try {
+                const tplRes = await fetch(`/api/player/templates?siteId=${encodeURIComponent(currentSiteId)}`);
+                if (tplRes.ok) activeCustomTemplates = await tplRes.json();
+            } catch (err) {
+                console.error("Erreur de chargement des styles de modèles:", err);
+            }
+
             updateResolution();
             updatePageSelector();
 
@@ -1431,6 +1557,87 @@
                 };
                 container.appendChild(label);
                 container.appendChild(input);
+
+                if (field.type === 'video_select') {
+                    const tplUploadContainer = document.createElement('div');
+                    tplUploadContainer.style.marginBottom = '10px';
+                    tplUploadContainer.style.marginTop = '4px';
+                    
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = 'video/*';
+                    fileInput.style.display = 'none';
+                    
+                    const uploadBtn = document.createElement('button');
+                    uploadBtn.type = 'button';
+                    uploadBtn.innerHTML = '➕ Charger une vidéo';
+                    uploadBtn.style.width = '100%';
+                    uploadBtn.style.padding = '8px';
+                    uploadBtn.style.background = '#27ae60';
+                    uploadBtn.style.color = 'white';
+                    uploadBtn.style.border = 'none';
+                    uploadBtn.style.borderRadius = '4px';
+                    uploadBtn.style.fontWeight = 'bold';
+                    uploadBtn.style.cursor = 'pointer';
+                    uploadBtn.style.display = 'flex';
+                    uploadBtn.style.alignItems = 'center';
+                    uploadBtn.style.justifyContent = 'center';
+                    uploadBtn.style.gap = '6px';
+                    
+                    uploadBtn.onclick = () => fileInput.click();
+                    
+                    fileInput.onchange = async () => {
+                        if (!fileInput.files.length) return;
+                        const file = fileInput.files[0];
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        
+                        const originalText = uploadBtn.innerHTML;
+                        uploadBtn.disabled = true;
+                        uploadBtn.innerHTML = '⏳ Téléchargement...';
+                        
+                        try {
+                            const res = await fetch('/api/admin/upload', {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}` },
+                                body: formData
+                            });
+                            
+                            if (res.ok) {
+                                const result = await res.json();
+                                alert('Fichier téléchargé avec succès!');
+                                
+                                const headers = { 'Authorization': `Bearer ${token}` };
+                                const mediaRes = await fetch('/api/admin/media', { headers });
+                                if (mediaRes.ok) {
+                                    availableMedia = await mediaRes.json();
+                                    populateMediaSelects();
+                                    
+                                    // Re-rendre les champs de modèle
+                                    renderTemplateFields(item);
+                                    
+                                    // Sélectionner la vidéo nouvellement créée
+                                    input.value = result.url;
+                                    item.data[field.key] = result.url;
+                                    renderPreview();
+                                }
+                            } else {
+                                const errorText = await res.text();
+                                alert('Erreur lors du téléchargement : ' + errorText);
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            alert('Erreur réseau ou serveur inaccessible lors du téléchargement.');
+                        } finally {
+                            uploadBtn.disabled = false;
+                            uploadBtn.innerHTML = originalText;
+                        }
+                    };
+                    
+                    tplUploadContainer.appendChild(fileInput);
+                    tplUploadContainer.appendChild(uploadBtn);
+                    container.appendChild(tplUploadContainer);
+                }
             });
         }
 
@@ -1681,36 +1888,139 @@
             if (item && item.template) {
                 tplLayer.style.display = 'flex';
                 tplLayer.style.padding = item.template === 'video_fullscreen' ? '0' : '70px 20px 20px 20px';
-                if (item.template === 'canteen') {
-                    const isLive = item.data.useLiveMenu !== false;
-                    if (isLive) {
-                        tplLayer.innerHTML = `
-                            <div style="color:#3498db; font-weight:bold; font-size:24px; border-bottom:2px solid #3498db; margin-bottom:15px; padding-bottom:5px;">${item.data.title || 'MENU CANTINE'} (En direct)</div>
-                            <div style="font-size:16px;">
-                                <p style="color:#2ecc71; font-weight:bold;">🟢 Menu de la semaine (Mise à jour automatique)</p>
-                                <p><i>Le menu du jour s'affichera automatiquement sur l'écran.</i></p>
-                            </div>`;
+
+                // Appliquer les styles généraux du template personnalisé
+                const customTpl = activeCustomTemplates[item.template];
+                if (customTpl) {
+                    if (customTpl.backgroundColor) tplLayer.style.backgroundColor = customTpl.backgroundColor;
+                    if (customTpl.backgroundUrl) {
+                        tplLayer.style.backgroundImage = `url("${customTpl.backgroundUrl}?token=${token}")`;
+                        tplLayer.style.backgroundSize = 'cover';
+                        tplLayer.style.backgroundPosition = 'center';
                     } else {
-                        tplLayer.innerHTML = `
-                            <div style="color:#3498db; font-weight:bold; font-size:24px; border-bottom:2px solid #3498db; margin-bottom:15px; padding-bottom:5px;">${item.data.title || 'MENU CANTINE'}</div>
-                            <div style="font-size:16px;">
-                                <p><b>Entrée:</b> ${item.data.starter || 'Non renseignée'}</p>
-                                <p><b>Plat:</b> ${item.data.main || 'Non renseigné'}</p>
-                                <p><b>Dessert:</b> ${item.data.dessert || 'Non renseigné'}</p>
-                            </div>`;
+                        tplLayer.style.backgroundImage = 'none';
+                    }
+                    if (customTpl.fontFamily) {
+                        tplLayer.style.fontFamily = customTpl.fontFamily.startsWith('font-') ? `"${customTpl.fontFamily}", sans-serif` : customTpl.fontFamily;
+                        // Injecter la police personnalisée si elle provient de la médiathèque
+                        if (customTpl.fontFamily.startsWith('font-')) {
+                            const fontId = customTpl.fontFamily.replace('font-', '');
+                            const fontMedia = availableMedia.find(m => m.id === fontId);
+                            if (fontMedia && !document.getElementById(`font-style-${fontId}`)) {
+                                const style = document.createElement('style');
+                                style.id = `font-style-${fontId}`;
+                                style.textContent = `@font-face { font-family: "${customTpl.fontFamily}"; src: url("${fontMedia.url}?token=${token}"); }`;
+                                document.head.appendChild(style);
+                            }
+                        }
+                    }
+                    if (customTpl.borderStyle && customTpl.borderStyle !== 'none') {
+                        tplLayer.style.border = `${customTpl.borderWidth || 0}px ${customTpl.borderStyle} ${customTpl.borderColor || 'transparent'}`;
+                    } else {
+                        tplLayer.style.border = 'none';
+                    }
+                    if (customTpl.borderRadius) tplLayer.style.borderRadius = `${customTpl.borderRadius}px`;
+                    else tplLayer.style.borderRadius = '0';
+                } else {
+                    tplLayer.style.backgroundColor = 'transparent';
+                    tplLayer.style.backgroundImage = 'none';
+                    tplLayer.style.fontFamily = 'sans-serif';
+                    tplLayer.style.border = 'none';
+                    tplLayer.style.borderRadius = '0';
+                }
+
+                // Surcharger avec le CSS personnalisé
+                const oldStyle = document.getElementById('custom-editor-template-styles');
+                if (oldStyle) oldStyle.remove();
+                if (customTpl && customTpl.customCss) {
+                    const style = document.createElement('style');
+                    style.id = 'custom-editor-template-styles';
+                    style.textContent = customTpl.customCss.replace(/([^\r\n,{}]+)(,(?=[^}]*{)|(?=[^{]*{))/g, '#template-preview-layer $1$2');
+                    document.head.appendChild(style);
+                }
+
+                if (item.template === 'canteen') {
+                    if (customTpl && customTpl.customHtml) {
+                        let html = customTpl.customHtml;
+                        const isLive = item.data.useLiveMenu !== false;
+                        if (isLive) {
+                            html = html.replace(/{{title}}/g, `${item.data.title || 'MENU CANTINE'} (En direct)`)
+                                       .replace(/{{day}}/g, 'Menu de la semaine')
+                                       .replace(/{{starter}}/g, '🟢 Mise à jour automatique')
+                                       .replace(/{{main}}/g, '<i>Le menu du jour s\'affichera automatiquement.</i>')
+                                       .replace(/{{dessert}}/g, '');
+                        } else {
+                            html = html.replace(/{{title}}/g, item.data.title || 'MENU CANTINE')
+                                       .replace(/{{day}}/g, 'Menu du jour')
+                                       .replace(/{{starter}}/g, item.data.starter || 'Non renseignée')
+                                       .replace(/{{main}}/g, item.data.main || 'Non renseigné')
+                                       .replace(/{{dessert}}/g, item.data.dessert || 'Non renseigné');
+                        }
+                        tplLayer.innerHTML = html;
+                    } else {
+                        const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
+                        const titleSize = (customTpl && customTpl.titleFontSize) ? `${customTpl.titleFontSize}px` : '24px';
+                        const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#ffffff';
+                        const textSize = (customTpl && customTpl.textFontSize) ? `${customTpl.textFontSize}px` : '16px';
+
+                        const isLive = item.data.useLiveMenu !== false;
+                        if (isLive) {
+                            tplLayer.innerHTML = `
+                                <div style="color:${titleColor}; font-weight:bold; font-size:${titleSize}; border-bottom:2px solid ${titleColor}; margin-bottom:15px; padding-bottom:5px;">${item.data.title || 'MENU CANTINE'} (En direct)</div>
+                                <div style="font-size:${textSize}; color:${textColor};">
+                                    <p style="color:#2ecc71; font-weight:bold;">🟢 Menu de la semaine (Mise à jour automatique)</p>
+                                    <p><i>Le menu du jour s'affichera automatiquement sur l'écran.</i></p>
+                                </div>`;
+                        } else {
+                            tplLayer.innerHTML = `
+                                <div style="color:${titleColor}; font-weight:bold; font-size:${titleSize}; border-bottom:2px solid ${titleColor}; margin-bottom:15px; padding-bottom:5px;">${item.data.title || 'MENU CANTINE'}</div>
+                                <div style="font-size:${textSize}; color:${textColor};">
+                                    <p><b>Entrée:</b> ${item.data.starter || 'Non renseignée'}</p>
+                                    <p><b>Plat:</b> ${item.data.main || 'Non renseigné'}</p>
+                                    <p><b>Dessert:</b> ${item.data.dessert || 'Non renseigné'}</p>
+                                </div>`;
+                        }
                     }
                 } else if (item.template === 'meeting') {
-                    const isLive = item.data.useLiveMeeting !== false;
-                    if (isLive) {
-                        tplLayer.innerHTML = `
-                            <div style="font-size:28px; font-weight:bold; margin-bottom:10px;">${item.data.room || 'Toutes les Salles'}</div>
-                            <div style="color:#bdc3c7; font-size:18px; margin-bottom:20px;">📅 Planning des Réunions du Jour (En direct)</div>
-                            <div style="display:inline-block; padding:8px 25px; border-radius:20px; background:#27ae60; color:white; font-weight:bold;">🟢 Live Agenda Sync</div>`;
+                    if (customTpl && customTpl.customHtml) {
+                        let html = customTpl.customHtml;
+                        const isLive = item.data.useLiveMeeting !== false;
+                        if (isLive) {
+                            html = html.replace(/{{room}}/g, item.data.room || 'Toutes les Salles')
+                                       .replace(/{{subject}}/g, '📅 Planning des Réunions du Jour (En direct)')
+                                       .replace(/{{status}}/g, '🟢 Live Agenda Sync')
+                                       .replace(/{{startTime}}/g, '')
+                                       .replace(/{{endTime}}/g, '');
+                        } else {
+                            html = html.replace(/{{room}}/g, item.data.room || 'Salle de Réunion')
+                                       .replace(/{{subject}}/g, item.data.subject || 'Sujet de la réunion')
+                                       .replace(/{{status}}/g, item.data.status || 'Disponible')
+                                       .replace(/{{startTime}}/g, '')
+                                       .replace(/{{endTime}}/g, '');
+                        }
+                        tplLayer.innerHTML = html;
                     } else {
-                        tplLayer.innerHTML = `
-                            <div style="font-size:28px; font-weight:bold; margin-bottom:10px;">${item.data.room || 'Salle de Réunion'}</div>
-                            <div style="color:#bdc3c7; font-size:18px; margin-bottom:20px;">${item.data.subject || 'Sujet de la réunion'}</div>
-                            <div style="display:inline-block; padding:8px 25px; border-radius:20px; background:${(item.data.status || 'Disponible') === 'Disponible' ? '#27ae60' : '#e74c3c'}; color:white; font-weight:bold;">${item.data.status || 'Disponible'}</div>`;
+                        const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#ffffff';
+                        const titleSize = (customTpl && customTpl.titleFontSize) ? `${customTpl.titleFontSize}px` : '28px';
+                        const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#bdc3c7';
+                        const textSize = (customTpl && customTpl.textFontSize) ? `${customTpl.textFontSize}px` : '18px';
+                        const badgeAvailable = (customTpl && customTpl.badgeBgAvailable) ? customTpl.badgeBgAvailable : '#27ae60';
+                        const badgeBusy = (customTpl && customTpl.badgeBgBusy) ? customTpl.badgeBgBusy : '#e74c3c';
+
+                        const isLive = item.data.useLiveMeeting !== false;
+                        if (isLive) {
+                            tplLayer.innerHTML = `
+                                <div style="font-size:${titleSize}; font-weight:bold; margin-bottom:10px; color:${titleColor}">${item.data.room || 'Toutes les Salles'}</div>
+                                <div style="color:${textColor}; font-size:${textSize}; margin-bottom:20px;">📅 Planning des Réunions du Jour (En direct)</div>
+                                <div style="display:inline-block; padding:8px 25px; border-radius:20px; background:#27ae60; color:white; font-weight:bold;">🟢 Live Agenda Sync</div>`;
+                        } else {
+                            const status = item.data.status || 'Disponible';
+                            const bgBadge = status === 'Disponible' ? badgeAvailable : badgeBusy;
+                            tplLayer.innerHTML = `
+                                <div style="font-size:${titleSize}; font-weight:bold; margin-bottom:10px; color:${titleColor}">${item.data.room || 'Salle de Réunion'}</div>
+                                <div style="color:${textColor}; font-size:${textSize}; margin-bottom:20px;">${item.data.subject || 'Sujet de la réunion'}</div>
+                                <div style="display:inline-block; padding:8px 25px; border-radius:20px; background:${bgBadge}; color:white; font-weight:bold;">${status}</div>`;
+                        }
                     }
                 } else if (item.template === 'video_fullscreen') {
                     const isMuted = item.data.muted === true;
@@ -1820,11 +2130,96 @@
 
                     div.onmousedown = (e) => startMoving(e, idx);
                     
-                    if (zone.type === 'text') div.innerHTML = `<div style="color:${zone.color || 'white'}; font-size:${zone.fontSize || 24}px; font-family:${zone.fontFamily || 'sans-serif'}; text-align:${zone.textAlign || 'center'}; width:100%; word-wrap: break-word;">${zone.text || ''}</div>`;
+                    // Calcul du ratio d'échelle pour adapter la taille de texte et le cadre web
+                    const ratio = (playlistData.resolution || '16/9').split('/');
+                    const wRatio = parseInt(ratio[0]) || 16;
+                    const hRatio = parseInt(ratio[1]) || 9;
+                    let virtualW = 1920;
+                    let virtualH = 1080;
+                    if (wRatio === 9 && hRatio === 16) {
+                        virtualW = 1080;
+                        virtualH = 1920;
+                    } else if (wRatio === 4 && hRatio === 3) {
+                        virtualW = 1024;
+                        virtualH = 768;
+                    } else if (wRatio < hRatio) {
+                        virtualW = 1080;
+                        virtualH = Math.round(1080 * (hRatio / wRatio));
+                    } else {
+                        virtualW = 1920;
+                        virtualH = Math.round(1920 * (hRatio / wRatio));
+                    }
+                    
+                    const screen = document.getElementById('preview-screen');
+                    const screenW = parseFloat(screen.style.width) || screen.offsetWidth || 800;
+                    const scaleRatio = screenW / virtualW;
+                    const scaledFontSize = (zone.fontSize || 24) * scaleRatio;
+                    
+                    if (zone.type === 'text' || zone.type === 'paragraph') {
+                        const innerDiv = document.createElement('div');
+                        innerDiv.style.cssText = `color:${zone.color || 'white'}; font-size:${scaledFontSize}px; font-family:${zone.fontFamily || 'sans-serif'}; text-align:${zone.textAlign || (zone.type === 'paragraph' ? 'left' : 'center')}; width:100%; ${zone.type === 'paragraph' ? 'height:100%; overflow:hidden;' : ''} word-wrap: break-word; outline: none; min-height: 1.2em;`;
+                        innerDiv.innerHTML = zone.text || '';
+                        
+                        innerDiv.ondblclick = (e) => {
+                            e.stopPropagation(); // Évite de déplacer la zone lors du double clic
+                            innerDiv.contentEditable = "true";
+                            innerDiv.style.cursor = 'text';
+                            div.style.cursor = 'text';
+                            innerDiv.focus();
+                            
+                            // Sélectionner tout le texte
+                            const range = document.createRange();
+                            range.selectNodeContents(innerDiv);
+                            const sel = window.getSelection();
+                            sel.removeAllRanges();
+                            sel.addRange(range);
+                            
+                            // Désactiver le glisser-déposer de la zone parente temporairement
+                            div.onmousedown = null;
+                        };
+                        
+                        innerDiv.oninput = () => {
+                            // Si c'est du texte simple, on veut préserver le texte brut, sinon l'HTML
+                            zone.text = zone.type === 'text' ? innerDiv.innerText : innerDiv.innerHTML;
+                            // Synchroniser avec les inputs de la barre latérale
+                            if (zone.type === 'text') {
+                                document.getElementById('z-text').value = zone.text;
+                            } else {
+                                const editor = document.getElementById('z-paragraph-editor');
+                                const textarea = document.getElementById('z-paragraph-html');
+                                if (editor) editor.innerHTML = zone.text;
+                                if (textarea) textarea.value = zone.text;
+                            }
+                        };
+                        
+                        innerDiv.onblur = () => {
+                            innerDiv.contentEditable = "false";
+                            innerDiv.style.cursor = '';
+                            div.style.cursor = '';
+                            // Rétablir le glisser-déposer
+                            div.onmousedown = (e) => startMoving(e, idx);
+                            // Sauvegarder l'état
+                            saveStateForUndo();
+                            renderPreview();
+                        };
+                        
+                        innerDiv.onkeydown = (e) => {
+                            if (zone.type === 'text' && e.key === 'Enter') {
+                                e.preventDefault();
+                                innerDiv.blur();
+                            }
+                            if (e.key === 'Escape') {
+                                e.preventDefault();
+                                innerDiv.blur();
+                            }
+                        };
+                        
+                        div.appendChild(innerDiv);
+                    }
                     else if (zone.type === 'video' && zone.url) div.innerHTML = `<video src="${zone.url}${PREVIEW_AUTH}" muted loop autoplay style="width:100%;height:100%;object-fit:contain;"></video>`;
                     else if (zone.type === 'clock') {
                         const clockDiv = document.createElement('div');
-                        clockDiv.style.cssText = `color:${zone.color || 'white'}; font-size:${zone.fontSize || 24}px; font-family:${zone.fontFamily || 'sans-serif'}; text-align:${zone.textAlign || 'center'}; width:100%; word-wrap: break-word;`;
+                        clockDiv.style.cssText = `color:${zone.color || 'white'}; font-size:${scaledFontSize}px; font-family:${zone.fontFamily || 'sans-serif'}; text-align:${zone.textAlign || 'center'}; width:100%; word-wrap: break-word;`;
                         clockDiv.innerText = formatClock(new Date(), zone.clockFormat || 'HH:mm:ss');
                         div.appendChild(clockDiv);
                     }
@@ -1834,28 +2229,6 @@
                         const panY = zone.webPanY || 0;
                         const iframeSrc = zone.url.startsWith('/') ? `${zone.url}${PREVIEW_AUTH}` : zone.url;
                         
-                        const ratio = (playlistData.resolution || '16/9').split('/');
-                        const wRatio = parseInt(ratio[0]) || 16;
-                        const hRatio = parseInt(ratio[1]) || 9;
-                        let virtualW = 1920;
-                        let virtualH = 1080;
-                        if (wRatio === 9 && hRatio === 16) {
-                            virtualW = 1080;
-                            virtualH = 1920;
-                        } else if (wRatio === 4 && hRatio === 3) {
-                            virtualW = 1024;
-                            virtualH = 768;
-                        } else if (wRatio < hRatio) {
-                            virtualW = 1080;
-                            virtualH = Math.round(1080 * (hRatio / wRatio));
-                        } else {
-                            virtualW = 1920;
-                            virtualH = Math.round(1920 * (hRatio / wRatio));
-                        }
-
-                        const screen = document.getElementById('preview-screen');
-                        const screenW = parseFloat(screen.style.width) || screen.offsetWidth || 800;
-                        const scaleRatio = screenW / virtualW;
                         const zoneVirtualW = virtualW * (zone.w / 100);
                         const zoneVirtualH = virtualH * (zone.h / 100);
                         const iframeWidth = zoneVirtualW / zoom;
@@ -1967,6 +2340,7 @@
         let initialPanY = 0;
 
         function startMoving(e, idx) {
+            if (e.target.isContentEditable) return;
             e.stopPropagation();
             saveStateForUndo();
             selectZone(idx);
@@ -2199,6 +2573,60 @@
             rotationCenter = null;
         });
 
+        let zWysiwygVisualMode = true;
+
+        function execParagraphCmd(cmd, val = null) {
+            document.execCommand(cmd, false, val);
+            syncParagraphEditorToTextarea();
+        }
+
+        function syncParagraphEditorToTextarea() {
+            const editor = document.getElementById('z-paragraph-editor');
+            const textarea = document.getElementById('z-paragraph-html');
+            if (editor && textarea) {
+                const htmlValue = editor.innerHTML;
+                textarea.value = htmlValue;
+                if (selectedZoneIndex !== -1) {
+                    const zone = playlistData.items[selectedIndex].zones[selectedZoneIndex];
+                    zone.text = htmlValue;
+                    renderPreview();
+                }
+            }
+        }
+
+        function syncParagraphTextareaToEditor(val) {
+            const editor = document.getElementById('z-paragraph-editor');
+            if (editor) {
+                editor.innerHTML = val;
+            }
+            if (selectedZoneIndex !== -1) {
+                const zone = playlistData.items[selectedIndex].zones[selectedZoneIndex];
+                zone.text = val;
+                renderPreview();
+            }
+        }
+
+        function toggleParagraphWysiwygMode() {
+            const editor = document.getElementById('z-paragraph-editor');
+            const textarea = document.getElementById('z-paragraph-html');
+            const btn = document.getElementById('z-paragraph-toggle-mode');
+            if (!editor || !textarea || !btn) return;
+
+            if (zWysiwygVisualMode) {
+                editor.style.display = 'none';
+                textarea.style.display = 'block';
+                textarea.focus();
+                btn.innerText = 'Éditeur Visuel';
+                zWysiwygVisualMode = false;
+            } else {
+                editor.style.display = 'block';
+                textarea.style.display = 'none';
+                editor.focus();
+                btn.innerText = 'Voir code HTML';
+                zWysiwygVisualMode = true;
+            }
+        }
+
         function selectZone(idx) {
             selectedZoneIndex = idx;
             const zone = playlistData.items[selectedIndex].zones[idx];
@@ -2234,15 +2662,42 @@
             document.getElementById('z-web-pany').value = zone.webPanY || 0;
 
             const isText = zone.type === 'text';
+            const isParagraph = zone.type === 'paragraph';
             const isClock = zone.type === 'clock';
             const isWeb = zone.type === 'web';
             const isQr = zone.type === 'qrcode';
             
-            document.getElementById('z-url').style.display = (isText || isWeb || isQr) ? 'none' : 'block';
+            document.getElementById('z-url').style.display = (isText || isParagraph || isWeb || isQr) ? 'none' : 'block';
             document.getElementById('z-web-url').style.display = isWeb ? 'block' : 'none';
             document.getElementById('z-text').style.display = (isText || isQr) ? 'block' : 'none';
+            document.getElementById('z-paragraph-container').style.display = isParagraph ? 'block' : 'none';
             document.getElementById('web-properties').style.display = isWeb ? 'block' : 'none';
-            document.querySelector('.text-properties').style.display = (isText || isClock) ? 'block' : 'none';
+            document.querySelector('.text-properties').style.display = (isText || isParagraph || isClock) ? 'block' : 'none';
+
+            if (isParagraph) {
+                zWysiwygVisualMode = true;
+                const editor = document.getElementById('z-paragraph-editor');
+                const textarea = document.getElementById('z-paragraph-html');
+                const btn = document.getElementById('z-paragraph-toggle-mode');
+                if (editor && textarea && btn) {
+                    editor.style.display = 'block';
+                    textarea.style.display = 'none';
+                    btn.innerText = 'Voir code HTML';
+                    editor.innerHTML = zone.text || '';
+                    textarea.value = zone.text || '';
+                }
+            }
+
+            const uploadContainer = document.getElementById('z-upload-container');
+            if (uploadContainer) {
+                const showUpload = (!isText && !isParagraph && !isWeb && !isQr && (zone.type === 'image' || zone.type === 'video'));
+                uploadContainer.style.display = showUpload ? 'block' : 'none';
+                
+                const fileInput = document.getElementById('z-upload-file');
+                if (fileInput) {
+                    fileInput.accept = zone.type === 'image' ? 'image/*' : 'video/*';
+                }
+            }
 
             const contentLabel = document.getElementById('z-content-label');
             const textInput = document.getElementById('z-text');
@@ -2252,13 +2707,46 @@
             } else if (isText) {
                 contentLabel.innerText = "Texte";
                 textInput.placeholder = "Votre texte ici...";
+            } else if (isParagraph) {
+                contentLabel.innerText = "Paragraphe (Texte riche)";
             } else if (isWeb) {
                 contentLabel.innerText = "Adresse Web / Chemin local";
             } else {
                 contentLabel.innerText = "Média";
             }
             
-            renderPreview();
+            // Mise à jour de la sélection visuelle sur le canevas sans reconstruire tout le DOM (permet le double-clic d'édition)
+            const screen = document.getElementById('preview-screen');
+            if (screen) {
+                const zones = screen.querySelectorAll('.zone');
+                zones.forEach((z, zIdx) => {
+                    z.classList.remove('selected');
+                    const resizer = z.querySelector('.resizer');
+                    if (resizer) resizer.remove();
+                    const rotator = z.querySelector('.rotator-handle');
+                    if (rotator) rotator.remove();
+                    // Restaurer le gestionnaire de mouvement si suspendu
+                    if (!z.onmousedown) {
+                        z.onmousedown = (e) => startMoving(e, zIdx);
+                    }
+                });
+                
+                const selectedZoneDiv = zones[idx];
+                if (selectedZoneDiv) {
+                    selectedZoneDiv.classList.add('selected');
+                    
+                    const resizer = document.createElement('div');
+                    resizer.className = 'resizer';
+                    resizer.onmousedown = (e) => startResizing(e);
+                    selectedZoneDiv.appendChild(resizer);
+
+                    const rotator = document.createElement('div');
+                    rotator.className = 'rotator-handle';
+                    rotator.onmousedown = (e) => startRotating(e, idx);
+                    selectedZoneDiv.appendChild(rotator);
+                }
+            }
+            
             renderTimeline();
         }
 
@@ -2275,7 +2763,12 @@
                 zone.url = '';
                 document.getElementById('z-url').value = '';
                 document.getElementById('z-web-url').value = '';
-                document.getElementById('z-text').value = newType === 'text' ? 'Nouveau Texte' : '';
+                document.getElementById('z-text').value = (newType === 'text' || newType === 'paragraph') ? 'Nouveau Texte' : '';
+                if (newType === 'paragraph') {
+                    const editor = document.getElementById('z-paragraph-editor');
+                    if (editor) editor.innerHTML = 'Nouveau paragraphe';
+                    zone.text = 'Nouveau paragraphe';
+                }
             }
             
             if (newType === 'web') {
@@ -2293,8 +2786,10 @@
                 delete zone.webPanY;
             }
             
-            if (newType !== 'qrcode') {
+            if (newType !== 'qrcode' && newType !== 'paragraph') {
                 zone.text = document.getElementById('z-text').value;
+            } else if (newType === 'paragraph') {
+                zone.text = document.getElementById('z-paragraph-editor').innerHTML;
             }
             
             zone.start = parseInt(document.getElementById('z-start').value) || 0;
@@ -2314,15 +2809,28 @@
             }
 
             const isText = zone.type === 'text';
+            const isParagraph = zone.type === 'paragraph';
             const isClock = zone.type === 'clock';
             const isWeb = zone.type === 'web';
             const isQr = zone.type === 'qrcode';
             
-            document.getElementById('z-url').style.display = (isText || isWeb || isQr) ? 'none' : 'block';
+            document.getElementById('z-url').style.display = (isText || isParagraph || isWeb || isQr) ? 'none' : 'block';
             document.getElementById('z-web-url').style.display = isWeb ? 'block' : 'none';
             document.getElementById('z-text').style.display = (isText || isQr) ? 'block' : 'none';
+            document.getElementById('z-paragraph-container').style.display = isParagraph ? 'block' : 'none';
             document.getElementById('web-properties').style.display = isWeb ? 'block' : 'none';
-            document.querySelector('.text-properties').style.display = (isText || isClock) ? 'block' : 'none';
+            document.querySelector('.text-properties').style.display = (isText || isParagraph || isClock) ? 'block' : 'none';
+
+            const uploadContainer = document.getElementById('z-upload-container');
+            if (uploadContainer) {
+                const showUpload = (!isText && !isParagraph && !isWeb && !isQr && (zone.type === 'image' || zone.type === 'video'));
+                uploadContainer.style.display = showUpload ? 'block' : 'none';
+                
+                const fileInput = document.getElementById('z-upload-file');
+                if (fileInput) {
+                    fileInput.accept = zone.type === 'image' ? 'image/*' : 'video/*';
+                }
+            }
 
             const contentLabel = document.getElementById('z-content-label');
             const textInput = document.getElementById('z-text');
@@ -2332,13 +2840,15 @@
             } else if (isText) {
                 contentLabel.innerText = "Texte";
                 textInput.placeholder = "Votre texte ici...";
+            } else if (isParagraph) {
+                contentLabel.innerText = "Paragraphe (Texte riche)";
             } else if (isWeb) {
                 contentLabel.innerText = "Adresse Web / Chemin local";
             } else {
                 contentLabel.innerText = "Média";
             }
 
-            if (zone.type === 'text' || zone.type === 'clock') {
+            if (zone.type === 'text' || zone.type === 'paragraph' || zone.type === 'clock') {
                 zone.fontFamily = document.getElementById('z-font-family').value;
                 zone.fontSize = parseInt(document.getElementById('z-font-size').value);
                 zone.color = document.getElementById('z-color').value;
@@ -2853,7 +3363,7 @@
         }
 
         document.addEventListener('keydown', (e) => {
-            if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+            if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 if (selectedZoneIndex !== -1) deleteZone();
                 else if (selectedIndex !== -1) deleteCurrentItem();
@@ -2898,6 +3408,63 @@
             }
         });
 
+        async function uploadMediaFromEditor() {
+            const input = document.getElementById('z-upload-file');
+            if (!input.files.length) return;
+            
+            const file = input.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const btn = document.getElementById('z-upload-btn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Téléchargement...';
+            
+            try {
+                const res = await fetch('/api/admin/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                
+                if (res.ok) {
+                    const result = await res.json();
+                    alert('Fichier téléchargé avec succès!');
+                    
+                    const headers = { 'Authorization': `Bearer ${token}` };
+                    const mediaRes = await fetch('/api/admin/media', { headers });
+                    if (mediaRes.ok) {
+                        availableMedia = await mediaRes.json();
+                        populateMediaSelects();
+                        
+                        if (selectedZoneIndex !== -1) {
+                            const zone = playlistData.items[selectedIndex].zones[selectedZoneIndex];
+                            const newUrl = result.url;
+                            
+                            // Re-peupler la liste des médias spécifiquement pour le type de cette zone
+                            populateMediaSelectsForZone(zone.type);
+                            
+                            // Sélectionner le média nouvellement créé
+                            document.getElementById('z-url').value = newUrl;
+                            
+                            // Mettre à jour la zone
+                            updateZone();
+                        }
+                    }
+                } else {
+                    const errorText = await res.text();
+                    alert('Erreur lors du téléchargement : ' + errorText);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Erreur réseau ou serveur inaccessible lors du téléchargement.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                input.value = ''; // Réinitialiser l'input
+            }
+        }
         document.addEventListener('focusin', (e) => {
             if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) {
                 saveStateForUndo();

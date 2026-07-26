@@ -175,6 +175,7 @@
         <button class="secondary" onclick="window.location.href='/canteen'">🍴 Cantine</button>
         <button class="secondary" onclick="window.location.href='/meetings'">🏢 Réunions</button>
         <button class="secondary" onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>
+        <button class="secondary" onclick="window.location.href='/templates'">🎨 Modèles</button>
         <button class="secondary" onclick="window.location.href='/users'">👥 Utilisateurs</button>
         <button class="secondary" onclick="window.location.href='/sites'">🏢 Sites</button>
         <button class="secondary" onclick="window.location.href='/systeme'">⚙️ Système</button>
@@ -198,6 +199,7 @@
                 <option value="">Tous les statuts</option>
                 <option value="online">En ligne (Connectés)</option>
                 <option value="offline">Hors ligne</option>
+                <option value="pending">En attente d'approbation</option>
             </select>
             <button class="secondary" onclick="load()">Actualiser</button>
         </div>
@@ -264,6 +266,9 @@
         if (role !== 'admin') {
             document.addEventListener('DOMContentLoaded', () => {
                 document.querySelectorAll('nav button[onclick*="/users"], nav button[onclick*="/systeme"], nav button[onclick*="/sites"]').forEach(b => b.style.display = 'none');
+                if (role !== 'editor') {
+                    document.querySelectorAll('nav button[onclick*="/templates"]').forEach(b => b.style.display = 'none');
+                }
             });
         }
 
@@ -356,7 +361,7 @@
                         healthText = `<span style="color:${ramColor}; font-weight:bold;">RAM: ${p.freeMem}/${p.totalMem}MB</span>${tempText}${diskText}`;
                     }
 
-                    html += `<tr data-status="${isOnline ? 'online' : 'offline'}" data-group-id="${p.groupId || ''}">
+                    html += `<tr data-status="${isOnline ? 'online' : 'offline'}" data-approved-status="${p.status || 'approved'}" data-group-id="${p.groupId || ''}" ${p.status === 'pending' ? 'style="background: rgba(230, 126, 34, 0.08); border-left: 4px solid #e67e22;"' : ''}>
                         <td><span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>${p.name}</td>
                         <td style="font-family:monospace; font-size:11px;">${id}</td>
                         <td>
@@ -365,7 +370,7 @@
                                 ${groups.map(g => `<option value="${g.id}" ${p.groupId === g.id ? 'selected' : ''}>${g.name}</option>`).join('')}
                             </select>
                         </td>
-                        <td>${p.status === 'pending' ? 'En attente' : 'Approuvé'}</td>
+                        <td>${p.status === 'pending' ? '<span style="background:#e67e22; color:white; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:bold;">En attente</span>' : '<span style="background:#2ecc71; color:white; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:bold;">Approuvé</span>'}</td>
                         <td>
                             <strong>${plName}</strong>
                             ${p.status === 'approved' ? `
@@ -458,11 +463,12 @@
                     }
 
                     html += `
-                    <div class="player-card" data-id="${id}" data-group-id="${p.groupId || ''}" data-status="${isOnline ? 'online' : 'offline'}">
+                    <div class="player-card" data-id="${id}" data-group-id="${p.groupId || ''}" data-status="${isOnline ? 'online' : 'offline'}" data-approved-status="${p.status || 'approved'}" ${p.status === 'pending' ? 'style="border: 2px dashed #e67e22;"' : ''}>
                         <div class="player-card-header">
                             <div class="player-card-title">
                                 <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
                                 <span>${p.name}</span>
+                                ${p.status === 'pending' ? '<span style="background:#e67e22; color:white; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold; margin-left:5px;">NEUF</span>' : ''}
                             </div>
                             <div class="player-card-group">
                                 <select onchange="assignGroup('${id}', this.value)" style="padding: 4px; font-size: 12px; background: #34495e;">
@@ -699,24 +705,31 @@
         function filterPlayers() {
             const gid = document.getElementById('filter-group') ? document.getElementById('filter-group').value : '';
             const status = document.getElementById('filter-status') ? document.getElementById('filter-status').value : '';
-            if (viewMode === 'table') {
-                document.querySelectorAll('#players-list table tr').forEach((row, i) => {
-                    if (i === 0) return;
-                    const pgid = row.dataset.groupId || '';
-                    const pstatus = row.dataset.status || '';
-                    const matchGroup = (gid === '' || pgid === gid);
-                    const matchStatus = (status === '' || pstatus === status);
-                    row.style.display = (matchGroup && matchStatus) ? '' : 'none';
-                });
-            } else {
-                document.querySelectorAll('#players-list .player-card').forEach((card) => {
-                    const pgid = card.dataset.groupId || '';
-                    const pstatus = card.dataset.status || '';
-                    const matchGroup = (gid === '' || pgid === gid);
-                    const matchStatus = (status === '' || pstatus === status);
-                    card.style.display = (matchGroup && matchStatus) ? '' : 'none';
-                });
-            }
+            
+            const items = viewMode === 'table'
+                ? document.querySelectorAll('#players-list table tr')
+                : document.querySelectorAll('#players-list .player-card');
+
+            items.forEach((item, i) => {
+                if (viewMode === 'table' && i === 0) return;
+                
+                const pgid = item.dataset.groupId || '';
+                const pstatus = item.dataset.status || '';
+                const papproved = item.dataset.approvedStatus || '';
+
+                const matchGroup = (gid === '' || pgid === gid);
+                
+                let matchStatus = false;
+                if (status === '') {
+                    matchStatus = true;
+                } else if (status === 'online' || status === 'offline') {
+                    matchStatus = (pstatus === status);
+                } else if (status === 'pending') {
+                    matchStatus = (papproved === 'pending');
+                }
+
+                item.style.display = (matchGroup && matchStatus) ? '' : 'none';
+            });
         }
 
         // --- GESTION VISUELLE DES LOGS ---

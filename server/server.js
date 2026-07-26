@@ -450,6 +450,21 @@ async function initializeDatabase() {
                 console.log(`Setting "${s.key}" ajouté.`);
             }
         }
+        // Migration : Sauvegarde automatique
+        const autoBackupSettings = [
+            { key: 'autoBackupEnabled', value: 'false' },
+            { key: 'autoBackupFrequency', value: 'weekly' },
+            { key: 'autoBackupExcludeMedia', value: 'true' },
+            { key: 'autoBackupKeepCount', value: '7' },
+            { key: 'lastAutoBackupTime', value: '' }
+        ];
+        for (const s of autoBackupSettings) {
+            const exists = await db('settings').where({ key: s.key }).first();
+            if (!exists) {
+                await db('settings').insert(s);
+                console.log(`Setting "${s.key}" ajouté.`);
+            }
+        }
     });
 
     await db.schema.hasTable('groups').then(async (exists) => {
@@ -594,6 +609,53 @@ async function initializeDatabase() {
         }
     });
 
+    // Table custom_templates
+    await db.schema.hasTable('custom_templates').then(async (exists) => {
+        if (!exists) {
+            await db.schema.createTable('custom_templates', (table) => {
+                table.string('id').primary();
+                table.string('templateType').notNullable();
+                table.string('siteId').nullable();
+                table.text('config').notNullable();
+                table.string('updatedAt').notNullable();
+                table.string('name').nullable();
+                table.boolean('isActive').defaultTo(false);
+                table.boolean('isSystem').defaultTo(false);
+                table.string('createdBy').nullable();
+            });
+            console.log('Table "custom_templates" créée.');
+        } else {
+            const hasName = await db.schema.hasColumn('custom_templates', 'name');
+            if (!hasName) {
+                await db.schema.table('custom_templates', (table) => {
+                    table.string('name').nullable();
+                });
+                console.log('Colonne "name" ajoutée à "custom_templates".');
+            }
+            const hasIsActive = await db.schema.hasColumn('custom_templates', 'isActive');
+            if (!hasIsActive) {
+                await db.schema.table('custom_templates', (table) => {
+                    table.boolean('isActive').defaultTo(false);
+                });
+                console.log('Colonne "isActive" ajoutée à "custom_templates".');
+            }
+            const hasIsSystem = await db.schema.hasColumn('custom_templates', 'isSystem');
+            if (!hasIsSystem) {
+                await db.schema.table('custom_templates', (table) => {
+                    table.boolean('isSystem').defaultTo(false);
+                });
+                console.log('Colonne "isSystem" ajoutée à "custom_templates".');
+            }
+            const hasCreatedBy = await db.schema.hasColumn('custom_templates', 'createdBy');
+            if (!hasCreatedBy) {
+                await db.schema.table('custom_templates', (table) => {
+                    table.string('createdBy').nullable();
+                });
+                console.log('Colonne "createdBy" ajoutée à "custom_templates".');
+            }
+        }
+    });
+
     // Migration : Ajouter les colonnes 2FA à la table users
     const has2FA = await db.schema.hasColumn('users', 'twoFactorEnabled');
     if (!has2FA) {
@@ -693,6 +755,352 @@ function verifyTOTP(secretBase32, code, window = 1, timeStep = 30) {
 }
 
 
+async function seedDefaultTemplates() {
+    try {
+        // 1. Migrer les modèles existants pour avoir les nouvelles colonnes correctement renseignées
+        const existing = await db('custom_templates').select('*');
+        
+        for (const item of existing) {
+            let updated = false;
+            const payload = {};
+            if (item.name === null || item.name === undefined) {
+                payload.name = item.id.includes('canteen') ? 'Menu Cantine Personnalisé' : 'Réunion Personnalisée';
+                updated = true;
+            }
+            if (item.isActive === null || item.isActive === undefined) {
+                payload.isActive = 1;
+                updated = true;
+            }
+            if (item.isSystem === null || item.isSystem === undefined) {
+                payload.isSystem = 0;
+                updated = true;
+            }
+            if (updated) {
+                await db('custom_templates').where({ id: item.id }).update(payload);
+                console.log(`Migré le template existant ${item.id} avec succès.`);
+            }
+        }
+
+        // 2. Insérer les modèles système par défaut si absents
+        const defaultTemplates = [
+            {
+                id: 'canteen_default',
+                templateType: 'canteen',
+                siteId: null,
+                name: 'Menu Classique',
+                isActive: 1,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#1a252f',
+                    backgroundUrl: '',
+                    fontFamily: 'sans-serif',
+                    titleColor: '#3498db',
+                    titleFontSize: '32',
+                    textColor: '#ffffff',
+                    textFontSize: '20',
+                    borderStyle: 'none',
+                    borderColor: '#3498db',
+                    borderWidth: '0',
+                    borderRadius: '8',
+                    customCss: '',
+                    customHtml: ''
+                }),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'canteen_dark_modern',
+                templateType: 'canteen',
+                siteId: null,
+                name: 'Sombre Moderne',
+                isActive: 0,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#0f172a',
+                    backgroundUrl: '',
+                    fontFamily: 'sans-serif',
+                    titleColor: '#38bdf8',
+                    titleFontSize: '36',
+                    textColor: '#f8fafc',
+                    textFontSize: '22',
+                    borderStyle: 'solid',
+                    borderColor: '#38bdf8',
+                    borderWidth: '2',
+                    borderRadius: '16',
+                    customCss: '.menu-title { font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }',
+                    customHtml: `<div class="menu-title" style="color:{{titleColor}}; font-size:{{titleFontSize}}px; text-align:center; margin-bottom:20px; border-bottom:2px dashed {{titleColor}}; padding-bottom:10px;">🍽️ {{title}} ({{day}})</div>\n<div style="color:{{textColor}}; font-size:{{textFontSize}}px; display:flex; flex-direction:column; gap:12px; padding: 0 10px;">\n  <div style="background:rgba(255,255,255,0.05); padding:12px; border-radius:8px;">🟢 <b>Entrée:</b> {{starter}}</div>\n  <div style="background:rgba(255,255,255,0.05); padding:12px; border-radius:8px;">🥩 <b>Plat:</b> {{main}}</div>\n  <div style="background:rgba(255,255,255,0.05); padding:12px; border-radius:8px;">🍰 <b>Dessert:</b> {{dessert}}</div>\n</div>`
+                }),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'canteen_warm_bistro',
+                templateType: 'canteen',
+                siteId: null,
+                name: 'Warm Bistro',
+                isActive: 0,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#2e1a0b',
+                    backgroundUrl: '',
+                    fontFamily: 'serif',
+                    titleColor: '#eab308',
+                    titleFontSize: '34',
+                    textColor: '#fef08a',
+                    textFontSize: '22',
+                    borderStyle: 'double',
+                    borderColor: '#eab308',
+                    borderWidth: '4',
+                    borderRadius: '4',
+                    customCss: '.menu-item { font-style: italic; margin-bottom: 8px; }',
+                    customHtml: `<div style="text-align:center; font-family:serif; border: 2px solid #eab308; padding:15px; height:100%; box-sizing:border-box;">\n  <div style="color:{{titleColor}}; font-size:{{titleFontSize}}px; font-weight:bold; margin-bottom:15px; border-bottom:1px solid {{titleColor}}; padding-bottom:5px;">🍷 {{title}} 🍷</div>\n  <div style="color:{{textColor}}; font-size:{{textFontSize}}px; line-height:1.6;">\n    <div class="menu-item"><b>Entrée</b><br>{{starter}}</div>\n    <div class="menu-item"><b>Plat Principal</b><br>{{main}}</div>\n    <div class="menu-item"><b>Dessert du Chef</b><br>{{dessert}}</div>\n  </div>\n</div>`
+                }),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'canteen_slate_chalk',
+                templateType: 'canteen',
+                siteId: null,
+                name: 'Ardoise Bistrot',
+                isActive: 0,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#1e1e1e',
+                    backgroundUrl: '',
+                    fontFamily: 'monospace',
+                    titleColor: '#ffffff',
+                    titleFontSize: '45',
+                    textColor: '#ffffff',
+                    textFontSize: '28',
+                    borderStyle: 'solid',
+                    borderColor: '#ffffff',
+                    borderWidth: '3',
+                    borderRadius: '12',
+                    customCss: '',
+                    customHtml: `<div style="border:3px solid #ffffff; border-radius:12px; padding:30px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; text-align:center; font-family:'Courier New', Courier, monospace; background:rgba(0,0,0,0.4);">\n  <div style="font-size:45px; color:#ffffff; font-weight:bold; border-bottom:2px dashed #ffffff; padding-bottom:15px; margin-bottom:25px; text-transform:uppercase;">🍳 L'Ardoise du Jour 🍳</div>\n  <div style="display:flex; flex-direction:column; gap:20px;">\n    <div>\n      <span style="font-size:18px; color:#aaaaaa; font-weight:bold; letter-spacing:2px; display:block; margin-bottom:5px;">ENTRÉE</span>\n      <span style="font-size:28px; color:#ffffff; font-weight:bold; font-style:italic;">{{starter}}</span>\n    </div>\n    <div style="width:50px; height:1px; background:#aaaaaa; margin:0 auto;"></div>\n    <div>\n      <span style="font-size:18px; color:#aaaaaa; font-weight:bold; letter-spacing:2px; display:block; margin-bottom:5px;">PLAT</span>\n      <span style="font-size:28px; color:#ffffff; font-weight:bold; font-style:italic;">{{main}}</span>\n    </div>\n    <div style="width:50px; height:1px; background:#aaaaaa; margin:0 auto;"></div>\n    <div>\n      <span style="font-size:18px; color:#aaaaaa; font-weight:bold; letter-spacing:2px; display:block; margin-bottom:5px;">DESSERT</span>\n      <span style="font-size:28px; color:#ffffff; font-weight:bold; font-style:italic;">{{dessert}}</span>\n    </div>\n  </div>\n</div>`
+                }),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'canteen_eco_fresh',
+                templateType: 'canteen',
+                siteId: null,
+                name: 'Frais & Nature',
+                isActive: 0,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#e8f5e9',
+                    backgroundUrl: '',
+                    fontFamily: 'sans-serif',
+                    titleColor: '#2e7d32',
+                    titleFontSize: '42',
+                    textColor: '#1b5e20',
+                    textFontSize: '26',
+                    borderStyle: 'solid',
+                    borderColor: '#2e7d32',
+                    borderWidth: '4',
+                    borderRadius: '24',
+                    customCss: '',
+                    customHtml: `<div style="border:4px solid #2e7d32; border-radius:24px; padding:35px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; text-align:center; font-family:sans-serif; background:#ffffff; color:#1b5e20;">\n  <div style="font-size:42px; color:#2e7d32; font-weight:bold; margin-bottom:30px;">🌿 Le Jardin des Saveurs 🌿</div>\n  <div style="display:flex; flex-direction:column; gap:25px; align-items:stretch;">\n    <div style="background:#f1f8e9; padding:15px; border-radius:12px; border-left:6px solid #8bc34a;">\n      <span style="font-size:16px; color:#558b2f; font-weight:bold; display:block; text-align:left; margin-bottom:5px;">🥣 L'ENTRÉE DU POTAGER</span>\n      <span style="font-size:26px; color:#1b5e20; font-weight:bold; display:block; text-align:left;">{{starter}}</span>\n    </div>\n    <div style="background:#f1f8e9; padding:15px; border-radius:12px; border-left:6px solid #4caf50;">\n      <span style="font-size:16px; color:#2e7d32; font-weight:bold; display:block; text-align:left; margin-bottom:5px;">🍛 LE PLAT CULTIVÉ</span>\n      <span style="font-size:26px; color:#1b5e20; font-weight:bold; display:block; text-align:left;">{{main}}</span>\n    </div>\n    <div style="background:#f1f8e9; padding:15px; border-radius:12px; border-left:6px solid #009688;">\n      <span style="font-size:16px; color:#00796b; font-weight:bold; display:block; text-align:left; margin-bottom:5px;">🍎 LE DESSERT VERGER</span>\n      <span style="font-size:26px; color:#1b5e20; font-weight:bold; display:block; text-align:left;">{{dessert}}</span>\n    </div>\n  </div>\n</div>`
+                }),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'canteen_bright_pop',
+                templateType: 'canteen',
+                siteId: null,
+                name: 'Pop Coloré',
+                isActive: 0,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#ff6b6b',
+                    backgroundUrl: '',
+                    fontFamily: 'sans-serif',
+                    titleColor: '#feca57',
+                    titleFontSize: '48',
+                    textColor: '#ffffff',
+                    textFontSize: '26',
+                    borderStyle: 'none',
+                    borderColor: '#ffffff',
+                    borderWidth: '0',
+                    borderRadius: '0',
+                    customCss: '',
+                    customHtml: `<div style="padding:30px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; color:#ffffff; font-family:sans-serif; text-shadow:1px 1px 3px rgba(0,0,0,0.2);">\n  <div style="font-size:48px; font-weight:900; letter-spacing:-2px; text-transform:uppercase; text-align:left; line-height:1;">BON AP' !<br><span style="color:#feca57; font-size:32px;">Menu de ce midi</span></div>\n  <div style="display:flex; flex-direction:column; gap:15px; margin: 30px 0;">\n    <div style="background:rgba(255,255,255,0.15); padding:15px; border-radius:15px;">\n      <span style="font-size:26px; font-weight:bold;"><span style="color:#feca57;">🥗 </span>{{starter}}</span>\n    </div>\n    <div style="background:rgba(255,255,255,0.15); padding:15px; border-radius:15px;">\n      <span style="font-size:26px; font-weight:bold;"><span style="color:#ff9ff3;">🍗 </span>{{main}}</span>\n    </div>\n    <div style="background:rgba(255,255,255,0.15); padding:15px; border-radius:15px;">\n      <span style="font-size:26px; font-weight:bold;"><span style="color:#48dbfb;">🍰 </span>{{dessert}}</span>\n    </div>\n  </div>\n  <div style="font-size:16px; opacity:0.8; text-align:right;">OmniSign Canteen Pop Style</div>\n</div>`
+                }),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'meeting_default',
+                templateType: 'meeting',
+                siteId: null,
+                name: 'Réunion Classique',
+                isActive: 1,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#1a252f',
+                    backgroundUrl: '',
+                    fontFamily: 'sans-serif',
+                    titleColor: '#ffffff',
+                    titleFontSize: '36',
+                    textColor: '#bdc3c7',
+                    textFontSize: '22',
+                    badgeBgAvailable: '#27ae60',
+                    badgeBgBusy: '#e74c3c',
+                    borderStyle: 'none',
+                    borderColor: '#3498db',
+                    borderWidth: '0',
+                    borderRadius: '8',
+                    customCss: '',
+                    customHtml: ''
+                }),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'meeting_tech_neon',
+                templateType: 'meeting',
+                siteId: null,
+                name: 'Néon High-Tech',
+                isActive: 0,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#090d16',
+                    backgroundUrl: '',
+                    fontFamily: 'monospace',
+                    titleColor: '#00f2fe',
+                    titleFontSize: '40',
+                    textColor: '#a5b4fc',
+                    textFontSize: '24',
+                    badgeBgAvailable: '#10b981',
+                    badgeBgBusy: '#f43f5e',
+                    borderStyle: 'solid',
+                    borderColor: '#00f2fe',
+                    borderWidth: '2',
+                    borderRadius: '12',
+                    customCss: '.neon-card { box-shadow: 0 0 15px rgba(0,242,254,0.3); } .neon-badge { padding: 4px 12px; border-radius: 4px; font-weight: bold; }',
+                    customHtml: `<div class="neon-card" style="padding:20px; border:1px solid #00f2fe; border-radius:8px; background:rgba(0,242,254,0.02); height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between;">\n  <div>\n    <div style="color:{{titleColor}}; font-size:{{titleFontSize}}px; font-weight:bold; letter-spacing:-1px; border-left:4px solid {{titleColor}}; padding-left:10px; margin-bottom:15px;">{{room}}</div>\n    <div style="color:{{textColor}}; font-size:{{textFontSize}}px;">📢 {{subject}}</div>\n  </div>\n  <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(0,242,254,0.1); padding-top:15px;">\n    <span class="neon-badge" style="background:{{badgeBg}}; color:white;">STATUS: {{status}}</span>\n    <span style="color:#6366f1; font-weight:bold;">🕒 {{startTime}} - {{endTime}}</span>\n  </div>\n</div>`
+                }),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'meeting_glassmorphism',
+                templateType: 'meeting',
+                siteId: null,
+                name: 'Glassmorphism Épuré',
+                isActive: 0,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#0f172a',
+                    backgroundUrl: '',
+                    fontFamily: 'sans-serif',
+                    titleColor: '#38bdf8',
+                    titleFontSize: '38',
+                    textColor: '#94a3b8',
+                    textFontSize: '22',
+                    badgeBgAvailable: '#10b981',
+                    badgeBgBusy: '#f43f5e',
+                    borderStyle: 'none',
+                    borderColor: '#ffffff',
+                    borderWidth: '0',
+                    borderRadius: '0',
+                    customCss: '',
+                    customHtml: `<div style="padding:40px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; text-align:center; font-family:sans-serif;">\n  <div style="background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:24px; padding:40px; box-shadow:0 8px 32px rgba(0,0,0,0.3); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); display:inline-block; margin:0 auto; width:80%;">\n    <div style="font-size:22px; color:#38bdf8; font-weight:bold; text-transform:uppercase; letter-spacing:3px; margin-bottom:15px;">📍 {{room}}</div>\n    <div style="font-size:38px; color:#ffffff; font-weight:bold; margin-bottom:10px;">{{subject}}</div>\n    <div style="font-size:22px; color:#94a3b8; font-weight:500; margin-bottom:30px;">⏱️ {{startTime}} - {{endTime}}</div>\n    <div>\n      <span style="display:inline-block; padding:10px 30px; font-size:18px; font-weight:bold; border-radius:100px; color:#ffffff; background:{{badgeBg}};">{{status}}</span>\n    </div>\n  </div>\n</div>`
+                }),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'meeting_corp_navy',
+                templateType: 'meeting',
+                siteId: null,
+                name: 'Corporate Navy',
+                isActive: 0,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#0f1e36',
+                    backgroundUrl: '',
+                    fontFamily: 'sans-serif',
+                    titleColor: '#d4af37',
+                    titleFontSize: '36',
+                    textColor: '#94a3b8',
+                    textFontSize: '20',
+                    badgeBgAvailable: '#10b981',
+                    badgeBgBusy: '#f43f5e',
+                    borderStyle: 'none',
+                    borderColor: '#ffffff',
+                    borderWidth: '0',
+                    borderRadius: '0',
+                    customCss: '',
+                    customHtml: `<div style="border-top:10px solid #d4af37; padding:40px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; font-family:sans-serif; color:#ffffff;">\n  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">\n    <span style="font-size:32px; font-weight:bold; color:#d4af37;">🏢 {{room}}</span>\n    <span style="display:inline-block; padding:6px 15px; font-size:16px; font-weight:bold; border-radius:4px; color:#ffffff; background:{{badgeBg}};">{{status}}</span>\n  </div>\n  <div style="margin:40px 0;">\n    <span style="font-size:18px; color:#94a3b8; font-weight:bold; display:block; margin-bottom:5px; text-transform:uppercase; letter-spacing:1px;">SUJET DE RÉUNION</span>\n    <span style="font-size:36px; font-weight:bold; display:block;">{{subject}}</span>\n  </div>\n  <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); padding:15px; border-radius:8px;">\n    <span style="font-size:20px; color:#94a3b8;">Créneau réservé</span>\n    <span style="font-size:24px; font-weight:bold; color:#d4af37;">🕒 {{startTime}} - {{endTime}}</span>\n  </div>\n</div>`
+                }),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'meeting_creative_orange',
+                templateType: 'meeting',
+                siteId: null,
+                name: 'Orange Créatif',
+                isActive: 0,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#ff7a00',
+                    backgroundUrl: '',
+                    fontFamily: 'sans-serif',
+                    titleColor: '#ffffff',
+                    titleFontSize: '60',
+                    textColor: '#ffffff',
+                    textFontSize: '32',
+                    badgeBgAvailable: '#2ecc71',
+                    badgeBgBusy: '#e74c3c',
+                    borderStyle: 'none',
+                    borderColor: '#ffffff',
+                    borderWidth: '0',
+                    borderRadius: '0',
+                    customCss: '',
+                    customHtml: `<div style="padding:40px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; font-family:sans-serif; color:#ffffff;">\n  <div>\n    <div style="font-size:60px; font-weight:900; letter-spacing:-2px; text-transform:uppercase; line-height:1; margin-bottom:10px;">{{room}}</div>\n    <div style="font-size:20px; font-weight:bold; opacity:0.9;">PLANNING DE SALLE</div>\n  </div>\n  <div style="background:#ffffff; color:#ff7a00; padding:25px; border-radius:20px; box-shadow:0 10px 20px rgba(0,0,0,0.15); margin: 20px 0;">\n    <div style="font-size:16px; font-weight:bold; color:#888888; text-transform:uppercase; margin-bottom:5px;">RÉUNION ACTUELLE</div>\n    <div style="font-size:32px; font-weight:bold; line-height:1.2; margin-bottom:10px;">{{subject}}</div>\n    <div style="font-size:20px; font-weight:bold; color:#ff7a00;">⏱️ {{startTime}} - {{endTime}}</div>\n  </div>\n  <div style="display:flex; justify-content:space-between; align-items:center;">\n    <span style="font-size:16px; font-weight:bold; opacity:0.8;">STATUT :</span>\n    <span style="display:inline-block; padding:8px 25px; font-size:16px; font-weight:bold; border-radius:100px; color:#ffffff; background:{{badgeBg}}; border:2px solid #ffffff;">{{status}}</span>\n  </div>\n</div>`
+                }),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'meeting_elegant_dark',
+                templateType: 'meeting',
+                siteId: null,
+                name: 'Sombre Élégant',
+                isActive: 0,
+                isSystem: 1,
+                config: JSON.stringify({
+                    backgroundColor: '#1c1917',
+                    backgroundUrl: '',
+                    fontFamily: 'serif',
+                    titleColor: '#e7e5e4',
+                    titleFontSize: '36',
+                    textColor: '#f5f5f4',
+                    textFontSize: '32',
+                    badgeBgAvailable: '#22c55e',
+                    badgeBgBusy: '#ef4444',
+                    borderStyle: 'none',
+                    borderColor: '#ffffff',
+                    borderWidth: '0',
+                    borderRadius: '0',
+                    customCss: '',
+                    customHtml: `<div style="border:2px solid #78716c; margin:20px; padding:35px; height:calc(100% - 40px); box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; font-family:serif; color:#f5f5f4;">\n  <div style="text-align:center;">\n    <div style="font-size:36px; font-weight:bold; letter-spacing:2px; font-family:serif; text-transform:uppercase; color:#e7e5e4;">✨ {{room}} ✨</div>\n    <div style="width:100px; height:1px; background:#78716c; margin:15px auto;"></div>\n  </div>\n  <div style="text-align:center; padding: 20px 0;">\n    <div style="font-size:32px; font-family:serif; font-style:italic; color:#f5f5f4; margin-bottom:15px;">{{subject}}</div>\n    <span style="display:inline-block; font-family:sans-serif; padding:5px 20px; border-radius:20px; border:1px solid #78716c; background:{{badgeBg}}; color:#ffffff; font-size:14px; font-weight:bold; letter-spacing:1px; text-transform:uppercase;">{{status}}</span>\n  </div>\n  <div style="text-align:center; font-size:20px; color:#a8a29e;">\n    <span>Horaires de réservation : <b>{{startTime}} - {{endTime}}</b></span>\n  </div>\n</div>`
+                }),
+                updatedAt: new Date().toISOString()
+            }
+        ];
+
+        for (const t of defaultTemplates) {
+            const exists = await db('custom_templates').where({ id: t.id }).first();
+            if (!exists) {
+                const hasActive = await db('custom_templates').where({ templateType: t.templateType, isActive: 1 }).first();
+                if (hasActive) {
+                    t.isActive = 0;
+                }
+                await db('custom_templates').insert(t);
+                console.log(`Modèle système par défaut "${t.name}" inséré.`);
+            }
+        }
+    } catch (err) {
+        console.error("Erreur lors de la population des templates par défaut:", err);
+    }
+}
+
 // Load settings from DB
 async function loadSettings() {
     const settings = await db('settings').select('*');
@@ -743,6 +1151,7 @@ async function loadSettings() {
 
 // Initialize DB and migrate data on server start
 initializeDatabase().then(async () => {
+    await seedDefaultTemplates();
     await loadSettings();
     console.log('✅ Base de données prête. JWT_SECRET et API_KEY chargés.');
     
@@ -761,6 +1170,10 @@ initializeDatabase().then(async () => {
         setInterval(checkSchedules, 60 * 1000); // Évaluation périodique
         setInterval(checkOfflinePlayers, 60 * 1000); // Évaluation périodique de l'état des écrans
         setInterval(triggerPeriodicScreenshots, 60 * 1000); // Évaluation périodique des captures
+        
+        // Démarrage de la sauvegarde automatique périodique
+        setTimeout(runAutoBackupCheck, 10000); // Premier check après 10s
+        setInterval(runAutoBackupCheck, 60 * 60 * 1000); // Vérification toutes les heures
     });
 }).catch(err => {
     console.error('❌ Échec de l\'initialisation de la base de données:', err);
@@ -1022,6 +1435,11 @@ app.get(['/player', '/preview-player.html'], (req, res) => {
 // Route pour la page de gestion des utilisateurs
 app.get('/users', (req, res) => {
     res.sendFile(path.join(__dirname, 'users.html'));
+});
+
+// Route pour la page de personnalisation des modèles
+app.get('/templates', (req, res) => {
+    res.sendFile(path.join(__dirname, 'templates.html'));
 });
 
 // Route pour la page de gestion des sites
@@ -2503,7 +2921,312 @@ app.get('/api/player/canteen/current', async (req, res) => {
         res.json({});
     }
 });
+// --- API PERSONNALISATION DES MODÈLES (Cantine, Réunion, etc.) ---
 
+// GET /api/admin/templates - Récupérer tous les modèles disponibles pour le site de l'utilisateur
+app.get('/api/admin/templates', authMiddleware, checkRole(['admin', 'editor']), async (req, res) => {
+    try {
+        const targetSiteId = req.user.siteId || null;
+        
+        let query = db('custom_templates');
+        if (targetSiteId) {
+            query = query.where(function() {
+                this.where({ siteId: targetSiteId }).orWhereNull('siteId');
+            });
+        }
+        
+        const records = await query.select('*');
+        
+        const formatted = records.map(r => ({
+            id: r.id,
+            name: r.name || (r.isSystem ? 'Modèle Système' : 'Sans nom'),
+            templateType: r.templateType,
+            siteId: r.siteId,
+            isActive: !!r.isActive,
+            isSystem: !!r.isSystem,
+            createdBy: r.createdBy,
+            config: typeof r.config === 'string' ? JSON.parse(r.config) : r.config,
+            updatedAt: r.updatedAt
+        }));
+        
+        res.json(formatted);
+    } catch (err) {
+        console.error("Erreur GET /api/admin/templates:", err);
+        res.status(500).send("Erreur lors du chargement des modèles.");
+    }
+});
+
+// POST /api/admin/templates - Créer un nouveau modèle personnalisé
+app.post('/api/admin/templates', authMiddleware, checkRole(['admin', 'editor']), async (req, res) => {
+    try {
+        const { name, templateType, config } = req.body;
+        if (!name || !templateType) {
+            return res.status(400).send("Nom et type de modèle requis.");
+        }
+
+        const targetSiteId = req.user.siteId || null;
+        const templateId = `tpl_${templateType}_${Date.now()}`;
+
+        const payload = {
+            id: templateId,
+            name: name.trim(),
+            templateType: templateType,
+            siteId: targetSiteId,
+            config: typeof config === 'string' ? config : JSON.stringify(config),
+            isActive: 0,
+            isSystem: 0,
+            createdBy: req.user.username,
+            updatedAt: new Date().toISOString()
+        };
+
+        await db('custom_templates').insert(payload);
+        res.json({ success: true, message: "Modèle créé avec succès.", templateId });
+    } catch (err) {
+        console.error("Erreur POST /api/admin/templates:", err);
+        res.status(500).send("Erreur lors de la création du modèle.");
+    }
+});
+
+// PUT /api/admin/templates/:id - Mettre à jour un modèle personnalisé ou système
+app.put('/api/admin/templates/:id', authMiddleware, checkRole(['admin', 'editor']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, config } = req.body;
+        
+        const existing = await db('custom_templates').where({ id }).first();
+        if (!existing) {
+            return res.status(404).send("Modèle non trouvé.");
+        }
+
+        // Si l'utilisateur est rattaché à un site et qu'il essaie de modifier un modèle global
+        if (req.user.siteId && existing.siteId !== req.user.siteId) {
+            return res.status(403).send("Vous ne pouvez pas modifier un modèle global.");
+        }
+
+        const payload = {
+            updatedAt: new Date().toISOString()
+        };
+        if (name !== undefined) payload.name = name.trim();
+        if (config !== undefined) payload.config = typeof config === 'string' ? config : JSON.stringify(config);
+
+        await db('custom_templates').where({ id }).update(payload);
+        checkSchedules(null, true);
+        res.json({ success: true, message: "Modèle mis à jour avec succès." });
+    } catch (err) {
+        console.error("Erreur PUT /api/admin/templates/:id:", err);
+        res.status(500).send("Erreur lors de la mise à jour du modèle.");
+    }
+});
+
+// POST /api/admin/templates/:id/apply - Activer un modèle
+app.post('/api/admin/templates/:id/apply', authMiddleware, checkRole(['admin', 'editor']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const template = await db('custom_templates').where({ id }).first();
+        if (!template) {
+            return res.status(404).send("Modèle non trouvé.");
+        }
+
+        if (req.user.siteId && template.siteId && template.siteId !== req.user.siteId) {
+            return res.status(403).send("Vous n'êtes pas autorisé à appliquer ce modèle.");
+        }
+
+        const type = template.templateType;
+        const targetSiteId = req.user.siteId || template.siteId || null;
+
+        await db.transaction(async trx => {
+            if (targetSiteId) {
+                await trx('custom_templates')
+                    .where({ templateType: type, siteId: targetSiteId })
+                    .update({ isActive: 0 });
+            } else {
+                await trx('custom_templates')
+                    .where({ templateType: type })
+                    .whereNull('siteId')
+                    .update({ isActive: 0 });
+            }
+
+            await trx('custom_templates')
+                .where({ id })
+                .update({ isActive: 1 });
+        });
+        checkSchedules(null, true);
+        res.json({ success: true, message: "Modèle appliqué avec succès." });
+    } catch (err) {
+        console.error("Erreur POST /api/admin/templates/:id/apply:", err);
+        res.status(500).send("Erreur lors de l'application du modèle.");
+    }
+});
+
+// DELETE /api/admin/templates/:id - Supprimer un modèle personnalisé
+app.delete('/api/admin/templates/:id', authMiddleware, checkRole(['admin', 'editor']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const template = await db('custom_templates').where({ id }).first();
+        if (!template) {
+            return res.status(404).send("Modèle non trouvé.");
+        }
+
+        if (template.isSystem) {
+            return res.status(400).send("Impossible de supprimer un modèle système.");
+        }
+
+        if (req.user.siteId && template.siteId !== req.user.siteId) {
+            return res.status(403).send("Vous n'êtes pas autorisé à supprimer ce modèle.");
+        }
+
+        if (template.isActive) {
+            const type = template.templateType;
+            const siteId = template.siteId;
+            
+            let fallback = await db('custom_templates')
+                .where({ templateType: type, siteId, isSystem: 1 })
+                .first()
+                || await db('custom_templates')
+                .where({ templateType: type, isSystem: 1 })
+                .first()
+                || await db('custom_templates')
+                .where({ templateType: type })
+                .whereNot({ id })
+                .first();
+
+            if (fallback) {
+                await db('custom_templates').where({ id: fallback.id }).update({ isActive: 1 });
+            }
+        }
+
+        await db('custom_templates').where({ id }).del();
+        res.json({ success: true, message: "Modèle supprimé avec succès." });
+    } catch (err) {
+        console.error("Erreur DELETE /api/admin/templates/:id:", err);
+        res.status(500).send("Erreur lors de la suppression du modèle.");
+    }
+});
+
+// GET /api/admin/templates/:type - Récupérer le modèle actif pour un type donné (Rétrocompatibilité)
+app.get('/api/admin/templates/:type', authMiddleware, checkRole(['admin', 'editor']), async (req, res) => {
+    try {
+        const { type } = req.params;
+        const targetSiteId = req.user.siteId || null;
+
+        let record = null;
+        if (targetSiteId) {
+            record = await db('custom_templates').where({ templateType: type, siteId: targetSiteId, isActive: 1 }).first();
+        }
+
+        if (!record) {
+            record = await db('custom_templates').where({ templateType: type, siteId: null, isActive: 1 }).first();
+        }
+
+        if (!record) {
+            record = await db('custom_templates').where({ templateType: type }).first();
+        }
+
+        if (record) {
+            const configObj = typeof record.config === 'string' ? JSON.parse(record.config) : record.config;
+            res.json({
+                id: record.id,
+                templateType: record.templateType,
+                siteId: record.siteId,
+                config: configObj,
+                updatedAt: record.updatedAt
+            });
+        } else {
+            res.json({ templateType: type, siteId: targetSiteId, config: {} });
+        }
+    } catch (err) {
+        console.error("Erreur GET /api/admin/templates/:type:", err);
+        res.status(500).send("Erreur lors de la récupération du modèle.");
+    }
+});
+
+// POST /api/admin/templates/:type - Enregistrer / Mettre à jour le modèle actif pour le site (Rétrocompatibilité)
+app.post('/api/admin/templates/:type', authMiddleware, checkRole(['admin', 'editor']), async (req, res) => {
+    try {
+        const { type } = req.params;
+        const { config } = req.body;
+        const targetSiteId = req.user.siteId || null;
+
+        let template = null;
+        if (targetSiteId) {
+            template = await db('custom_templates').where({ templateType: type, siteId: targetSiteId, isActive: 1 }).first();
+        }
+        if (!template) {
+            template = await db('custom_templates').where({ templateType: type, siteId: null, isActive: 1 }).first();
+        }
+
+        if (template) {
+            await db('custom_templates').where({ id: template.id }).update({
+                config: typeof config === 'string' ? config : JSON.stringify(config),
+                updatedAt: new Date().toISOString()
+            });
+            checkSchedules(null, true);
+            res.json({ success: true, message: "Modèle mis à jour avec succès.", templateId: template.id });
+        } else {
+            const templateId = `tpl_${type}_${Date.now()}`;
+            await db('custom_templates').insert({
+                id: templateId,
+                name: 'Modèle Actif',
+                templateType: type,
+                siteId: targetSiteId,
+                config: typeof config === 'string' ? config : JSON.stringify(config),
+                isActive: 1,
+                isSystem: 0,
+                createdBy: req.user.username,
+                updatedAt: new Date().toISOString()
+            });
+            checkSchedules(null, true);
+            res.json({ success: true, message: "Modèle créé et appliqué avec succès.", templateId });
+        }
+    } catch (err) {
+        console.error("Erreur POST /api/admin/templates/:type:", err);
+        res.status(500).send("Erreur lors de l'enregistrement du modèle.");
+    }
+});
+
+// GET /api/player/templates - Endpoint public pour récupérer les styles de modèles d'un site (Version Active)
+app.get('/api/player/templates', async (req, res) => {
+    try {
+        const { siteId } = req.query;
+        const targetSiteId = (siteId && siteId !== 'undefined' && siteId !== 'null') ? siteId : null;
+
+        const result = {};
+
+        for (const type of ['canteen', 'meeting']) {
+            let activeTemplate = null;
+            if (targetSiteId) {
+                activeTemplate = await db('custom_templates')
+                    .where({ templateType: type, siteId: targetSiteId, isActive: 1 })
+                    .first();
+            }
+
+            if (!activeTemplate) {
+                activeTemplate = await db('custom_templates')
+                    .where({ templateType: type, siteId: null, isActive: 1 })
+                    .first();
+            }
+
+            if (!activeTemplate) {
+                activeTemplate = await db('custom_templates')
+                    .where({ templateType: type })
+                    .first();
+            }
+
+            if (activeTemplate) {
+                const configObj = typeof activeTemplate.config === 'string' ? JSON.parse(activeTemplate.config) : activeTemplate.config;
+                result[type] = configObj;
+            } else {
+                result[type] = {};
+            }
+        }
+
+        res.json(result);
+    } catch (err) {
+        console.error("Erreur GET /api/player/templates:", err);
+        res.json({});
+    }
+});
 // --- API GESTION DES SALLES DE RÉUNION ET RÉUNIONS (AGENDA & GUIDANCE VISITEURS) ---
 
 // 1. SALLES DE RÉUNION (Meeting Rooms)
@@ -3212,6 +3935,7 @@ app.post('/api/admin/test-email', authMiddleware, checkRole(['admin']), async (r
 
 // API Admin : Outil de sauvegarde (Export ZIP)
 app.get('/api/admin/backup', authMiddleware, checkRole(['admin']), async (req, res) => {
+    const excludeMedia = req.query.excludeMedia === 'true';
     try {
         const zip = new AdmZip();
         
@@ -3235,18 +3959,29 @@ app.get('/api/admin/backup', authMiddleware, checkRole(['admin']), async (req, r
 
         zip.addFile("database_export.json", Buffer.from(JSON.stringify(dbExport, null, 2), "utf8"));
 
-        // 2. Ajout de la médiathèque physique
-        if (fs.existsSync(MEDIA_DIR)) {
+        // 2. Ajout de la médiathèque physique si non exclue
+        if (!excludeMedia && fs.existsSync(MEDIA_DIR)) {
             zip.addLocalFolder(MEDIA_DIR, "media");
         }
 
-        const buffer = zip.toBuffer();
-        res.set('Content-Type', 'application/zip');
-        res.set('Content-Disposition', `attachment; filename=pidyn_backup_${Date.now()}.zip`);
-        res.send(buffer);
+        const tempFilePath = path.join(__dirname, `temp_backup_${Date.now()}.zip`);
+        zip.writeZip(tempFilePath);
+
+        res.download(tempFilePath, excludeMedia ? `backup_light_pidyn_${Date.now()}.zip` : `backup_pidyn_${Date.now()}.zip`, async (err) => {
+            try {
+                if (fs.existsSync(tempFilePath)) {
+                    await fs.remove(tempFilePath);
+                }
+            } catch (cleanupErr) {
+                console.error("Erreur nettoyage backup temporaire:", cleanupErr);
+            }
+            if (err && !res.headersSent) {
+                console.error("Erreur lors de l'envoi de la sauvegarde:", err);
+            }
+        });
     } catch (error) {
         console.error("Erreur lors de la sauvegarde :", error);
-        res.status(500).send("Erreur lors de la génération de la sauvegarde.");
+        res.status(500).send("Erreur lors de la génération de la sauvegarde : " + error.message);
     }
 });
 
@@ -3719,6 +4454,126 @@ app.post('/api/admin/system/test-webhook', authMiddleware, checkRole(['admin']),
         res.status(500).send('Erreur lors de l\'envoi du Webhook test : ' + e.message);
     }
 });
+
+// Worker de surveillance et génération des sauvegardes automatiques
+async function runAutoBackupCheck() {
+    try {
+        const settings = await db('settings').select('*');
+        const enabledSetting = settings.find(s => s.key === 'autoBackupEnabled');
+        const enabled = enabledSetting ? enabledSetting.value === 'true' : false;
+        if (!enabled) return;
+
+        const frequencySetting = settings.find(s => s.key === 'autoBackupFrequency');
+        const frequency = frequencySetting ? frequencySetting.value : 'weekly'; // daily, weekly, monthly
+
+        const excludeMediaSetting = settings.find(s => s.key === 'autoBackupExcludeMedia');
+        const excludeMedia = excludeMediaSetting ? excludeMediaSetting.value !== 'false' : true;
+
+        const keepCountSetting = settings.find(s => s.key === 'autoBackupKeepCount');
+        const keepCount = keepCountSetting ? (parseInt(keepCountSetting.value, 10) || 7) : 7;
+
+        const lastBackupSetting = settings.find(s => s.key === 'lastAutoBackupTime');
+        const lastBackupTime = lastBackupSetting && lastBackupSetting.value ? new Date(lastBackupSetting.value) : null;
+
+        const now = new Date();
+
+        // Vérifier si un backup est dû
+        let isDue = false;
+        if (!lastBackupTime) {
+            isDue = true;
+        } else {
+            const diffMs = now - lastBackupTime;
+            const diffDays = diffMs / (24 * 60 * 60 * 1000);
+
+            if (frequency === 'daily') {
+                if (diffDays >= 0.95) isDue = true;
+            } else if (frequency === 'weekly') {
+                if (diffDays >= 6.9) isDue = true;
+            } else if (frequency === 'monthly') {
+                if (now.getMonth() !== lastBackupTime.getMonth() || now.getFullYear() !== lastBackupTime.getFullYear()) {
+                    isDue = true;
+                }
+            }
+        }
+
+        if (isDue) {
+            console.log(`[AutoBackup] Lancement de la sauvegarde automatique périodique (${frequency}, excludeMedia: ${excludeMedia})...`);
+            await generateAutoBackup(excludeMedia, keepCount);
+            
+            await db('settings')
+                .insert({ key: 'lastAutoBackupTime', value: now.toISOString() })
+                .onConflict('key')
+                .merge();
+            console.log("[AutoBackup] Sauvegarde automatique terminée avec succès.");
+        }
+    } catch (err) {
+        console.error("Erreur dans le worker de sauvegarde automatique:", err);
+    }
+}
+
+async function generateAutoBackup(excludeMedia, keepCount) {
+    const backupDir = path.join(__dirname, 'backups');
+    await fs.ensureDir(backupDir);
+
+    const zip = new AdmZip();
+    
+    // 0. Base SQLite
+    if (fs.existsSync(SQLITE_DB_PATH)) {
+        zip.addLocalFile(SQLITE_DB_PATH);
+    }
+
+    // 1. Export JSON des tables
+    const playlists = await db('playlists').select('*');
+    const mediaRecords = await db('media').select('*');
+    const sequences = await db('sequences').select('*');
+
+    const dbExport = {
+        version: "1.0",
+        date: new Date().toISOString(),
+        playlists: playlists.map(p => ({ ...p, items: JSON.parse(p.items) })),
+        media: mediaRecords,
+        sequences: sequences.map(s => ({ ...s, playlistIds: JSON.parse(s.playlistIds) }))
+    };
+    zip.addFile("database_export.json", Buffer.from(JSON.stringify(dbExport, null, 2), "utf8"));
+
+    // 2. Médiathèque
+    if (!excludeMedia && fs.existsSync(MEDIA_DIR)) {
+        zip.addLocalFolder(MEDIA_DIR, "media");
+    }
+
+    const typeStr = excludeMedia ? 'light' : 'full';
+    const timestampStr = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `backup_auto_${typeStr}_${timestampStr}.zip`;
+    const destPath = path.join(backupDir, fileName);
+
+    zip.writeZip(destPath);
+    console.log(`[AutoBackup] Fichier généré: ${destPath}`);
+
+    // 3. Rotation des sauvegardes
+    try {
+        const files = await fs.readdir(backupDir);
+        const prefix = `backup_auto_${typeStr}_`;
+        const autoBackupFiles = files
+            .filter(f => f.startsWith(prefix) && f.endsWith('.zip'))
+            .map(f => {
+                const filePath = path.join(backupDir, f);
+                const stat = fs.statSync(filePath);
+                return { name: f, path: filePath, mtime: stat.mtime };
+            });
+
+        autoBackupFiles.sort((a, b) => b.mtime - a.mtime);
+
+        if (autoBackupFiles.length > keepCount) {
+            const toDelete = autoBackupFiles.slice(keepCount);
+            for (const f of toDelete) {
+                await fs.remove(f.path);
+                console.log(`[AutoBackup] Suppression ancienne sauvegarde: ${f.name}`);
+            }
+        }
+    } catch (rotationErr) {
+        console.error("[AutoBackup] Erreur lors de la rotation des sauvegardes:", rotationErr);
+    }
+}
 
 // Gestionnaire d'erreurs global pour capturer les erreurs Multer ou système
 app.use((err, req, res, next) => {

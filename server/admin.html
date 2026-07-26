@@ -20,6 +20,15 @@
         .stat-card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.25); }
         .stat-card h3 { margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #bdc3c7; }
         .stat-card p { margin: 0; font-size: 2.2em; font-weight: bold; color: #3498db; }
+        @keyframes orange-pulse {
+            0% { box-shadow: 0 4px 6px rgba(0,0,0,0.15), 0 0 0 0px rgba(230, 126, 34, 0.4); }
+            50% { box-shadow: 0 8px 15px rgba(0,0,0,0.25), 0 0 15px 6px rgba(230, 126, 34, 0.6); }
+            100% { box-shadow: 0 4px 6px rgba(0,0,0,0.15), 0 0 0 0px rgba(230, 126, 34, 0.4); }
+        }
+        .pulse-card {
+            border: 2px solid #e67e22 !important;
+            animation: orange-pulse 2s infinite ease-in-out;
+        }
     </style>
     <link rel="stylesheet" href="/assets/theme.css">
     <script src="/assets/theme.js"></script>
@@ -65,6 +74,7 @@
         <button class="secondary" onclick="window.location.href='/canteen'">🍴 Cantine</button>
         <button class="secondary" onclick="window.location.href='/meetings'">🏢 Réunions</button>
         <button class="secondary" onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>
+        <button class="secondary" onclick="window.location.href='/templates'">🎨 Modèles</button>
         <button class="secondary" onclick="window.location.href='/users'">👥 Utilisateurs</button>
         <button class="secondary" onclick="window.location.href='/sites'">🏢 Sites</button>
         <button class="secondary" onclick="window.location.href='/systeme'">⚙️ Système</button>
@@ -98,11 +108,15 @@
                 <h3>Écrans hors ligne</h3>
                 <p id="offline-screens-count" style="color: #e74c3c;">0</p>
             </div>
+            <div class="stat-card" id="pending-screens-card" style="cursor: pointer; display: none;" onclick="window.location.href='/ecrans?status=pending'">
+                <h3>Écrans en attente</h3>
+                <p id="pending-screens-count" style="color: #e67e22; font-weight: bold;">0</p>
+            </div>
             <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='/diaporamas'">
                 <h3>Diaporamas</h3>
                 <p id="playlists-count">0</p>
             </div>
-            <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='/diaporamas'">
+            <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='/diaporamas#sequences-section'">
                 <h3>Séquences</h3>
                 <p id="sequences-count">0</p>
             </div>
@@ -253,6 +267,9 @@
 
                 if (role !== 'admin') {
                     document.querySelectorAll('nav button[onclick*="/users"], nav button[onclick*="/systeme"], nav button[onclick*="/sites"]').forEach(b => b.style.display = 'none');
+                    if (role !== 'editor') {
+                        document.querySelectorAll('nav button[onclick*="/templates"]').forEach(b => b.style.display = 'none');
+                    }
                 }
 
                 if (role === 'admin' || role === 'editor') {
@@ -316,9 +333,15 @@
             allPlayersData = players || {};
             let onlineCount = 0;
             let offlineCount = 0;
+            let pendingCount = 0;
             for (let id in players) {
                 const p = players[id];
                 if (!id || id === 'undefined' || id === 'null') continue; // Ignorer les entrées mal formées
+                
+                if (p.status === 'pending') {
+                    pendingCount++;
+                }
+
                 const isOnline = p.lastSeen && (new Date() - new Date(p.lastSeen) < 60000);
                 if (isOnline) {
                     onlineCount++;
@@ -328,6 +351,19 @@
             }
             document.getElementById('online-screens-count').innerText = onlineCount;
             document.getElementById('offline-screens-count').innerText = offlineCount;
+            
+            const pendingCard = document.getElementById('pending-screens-card');
+            if (pendingCard) {
+                if (pendingCount > 0) {
+                    document.getElementById('pending-screens-count').innerText = pendingCount;
+                    pendingCard.style.display = 'block';
+                    pendingCard.classList.add('pulse-card');
+                } else {
+                    pendingCard.style.display = 'none';
+                    pendingCard.classList.remove('pulse-card');
+                }
+            }
+            
             populateAnalyticsFilters(players);
         }
 

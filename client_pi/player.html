@@ -16,6 +16,14 @@
             overflow: hidden;
             background-color: black; /* Fallback background */
         }
+        #current-page-zones {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+        }
         #player-screen .bg-layer {
             position: absolute;
             top: 0; left: 0;
@@ -451,10 +459,72 @@
 
         let currentIndex = 0;
         let playlistData = { items: [] };
+
+        function resizePlayerScreen() {
+            const screen = document.getElementById('player-screen');
+            if (!screen) return;
+            const res = playlistData.resolution || '16/9';
+            const ratio = res.split('/');
+            const wRatio = parseInt(ratio[0]) || 16;
+            const hRatio = parseInt(ratio[1]) || 9;
+            
+            const windowW = window.innerWidth;
+            const windowH = window.innerHeight;
+            
+            let w = windowW;
+            let h = windowW * (hRatio / wRatio);
+            
+            if (h > windowH) {
+                h = windowH;
+                w = windowH * (wRatio / hRatio);
+            }
+            
+            screen.style.width = w + 'px';
+            screen.style.height = h + 'px';
+            screen.style.position = 'absolute';
+            screen.style.left = '50%';
+            screen.style.top = '50%';
+            screen.style.transform = 'translate(-50%, -50%)';
+        }
+        window.addEventListener('resize', resizePlayerScreen);
+
         let isPlaying = false;
         let playTimeout = null;
         let activeClockIntervals = []; // Pour stocker les intervalles des horloges
         let currentPlaylistId = null;
+        let activeCustomTemplates = {};
+
+        async function loadCustomTemplates() {
+            try {
+                let url;
+                if (previewId && apiKey) {
+                    url = `${serverUrl}/api/player/templates?siteId=${encodeURIComponent(playlistData.siteId || '')}`;
+                } else if (playlistData && playlistData.serverOnline !== false) {
+                    const targetServerUrl = playlistData.serverUrl || serverUrl;
+                    url = `${targetServerUrl}/api/player/templates?siteId=${encodeURIComponent(playlistData.siteId || '')}`;
+                } else {
+                    url = window.location.protocol === 'file:' ? 'templates.json' : 'templates.json?nocache=' + Date.now();
+                }
+                
+                let res;
+                try {
+                    res = await fetch(url);
+                } catch (e) {
+                    if (url.startsWith('http')) {
+                        const localUrl = window.location.protocol === 'file:' ? 'templates.json' : 'templates.json?nocache=' + Date.now();
+                        res = await fetch(localUrl);
+                    } else {
+                        throw e;
+                    }
+                }
+
+                if (res.ok) {
+                    activeCustomTemplates = await res.json();
+                }
+            } catch (err) {
+                console.error("Erreur de chargement des styles de modèles:", err);
+            }
+        }
 
         // Protection anti-mise en veille au niveau du navigateur (Screen Wake Lock API)
         let wakeLock = null;
@@ -599,30 +669,34 @@
                         currentPlaylistId = newData.id;
                         currentIndex = 0;
                         
-                        if (splashUrl) {
-                            const splashScreenElement = document.getElementById('splash-screen');
-                            const authParam = (previewId && apiKey) ? `?apiKey=${apiKey}` : '';
-                            const base = splashUrl.startsWith('./') ? '' : serverUrl;
-                            splashScreenElement.src = `${base}${splashUrl}${authParam}`;
-                            splashScreenElement.style.display = 'block';
-                            document.getElementById('loader').style.display = 'none';
-                            
-                            if (playTimeout) clearTimeout(playTimeout);
-                            isPlaying = true;
-                            playTimeout = setTimeout(playNext, 3000); 
-                        } else {
-                            isPlaying = true;
-                            playNext();
-                        }
+                        loadCustomTemplates().then(() => {
+                            if (splashUrl) {
+                                const splashScreenElement = document.getElementById('splash-screen');
+                                const authParam = (previewId && apiKey) ? `?apiKey=${apiKey}` : '';
+                                const base = splashUrl.startsWith('./') ? '' : serverUrl;
+                                splashScreenElement.src = `${base}${splashUrl}${authParam}`;
+                                splashScreenElement.style.display = 'block';
+                                document.getElementById('loader').style.display = 'none';
+                                
+                                if (playTimeout) clearTimeout(playTimeout);
+                                isPlaying = true;
+                                playTimeout = setTimeout(playNext, 3000); 
+                            } else {
+                                isPlaying = true;
+                                playNext();
+                            }
+                        });
                     } else {
                         // Mise à jour simple des données sans couper la lecture
                         playlistData = newData;
                         log("Données de playlist synchronisées.");
-                        if (!isPlaying) {
-                            isPlaying = true;
-                            currentIndex = 0;
-                            playNext();
-                        }
+                        loadCustomTemplates().then(() => {
+                            if (!isPlaying) {
+                                isPlaying = true;
+                                currentIndex = 0;
+                                playNext();
+                            }
+                        });
                     }
                     
                     // Afficher les alertes stockées dans le manifest
@@ -661,6 +735,8 @@
                 return;
             }
             if (currentIndex >= playlistData.items.length) currentIndex = 0;
+
+            resizePlayerScreen();
 
             // Cacher le splashscreen si visible
             const splashScreenElement = document.getElementById('splash-screen');
@@ -755,7 +831,7 @@
             if (bgGlobal) {
                 const auth = (previewId && apiKey) ? `?apiKey=${apiKey}` : '';
                 globalBgElement.src = bgGlobal.startsWith('/media') ? `${bgGlobal}${auth}` : bgGlobal;
-                globalBgElement.style.display = 'block';
+                    globalBgElement.style.display = 'block';
             } else {
                 globalBgElement.style.display = 'none';
             }
@@ -768,6 +844,50 @@
                 const tpl = document.createElement('div');
                 tpl.className = 'tpl-container anim-fade-in';
                 const targetServerUrl = playlistData.serverUrl || serverUrl;
+                
+                const playerWidth = window.innerWidth;
+                const scaleRatio = playerWidth / 1920;
+
+                // Appliquer les styles généraux du template personnalisé
+                const customTpl = activeCustomTemplates[page.template];
+                if (customTpl) {
+                    if (customTpl.backgroundColor) tpl.style.backgroundColor = customTpl.backgroundColor;
+                    if (customTpl.backgroundUrl) {
+                        const bgUrl = customTpl.backgroundUrl.startsWith('./') ? customTpl.backgroundUrl : `${targetServerUrl}${customTpl.backgroundUrl}`;
+                        const auth = (previewId && apiKey) ? `?apiKey=${apiKey}` : '';
+                        tpl.style.backgroundImage = `url("${bgUrl}${auth}")`;
+                        tpl.style.backgroundSize = 'cover';
+                        tpl.style.backgroundPosition = 'center';
+                    } else {
+                        tpl.style.backgroundImage = 'none';
+                    }
+                    if (customTpl.fontFamily) {
+                        tpl.style.fontFamily = customTpl.fontFamily.startsWith('font-') ? `"${customTpl.fontFamily}", sans-serif` : customTpl.fontFamily;
+                    }
+                    if (customTpl.borderStyle && customTpl.borderStyle !== 'none') {
+                        tpl.style.border = `${customTpl.borderWidth || 0}px ${customTpl.borderStyle} ${customTpl.borderColor || 'transparent'}`;
+                    } else {
+                        tpl.style.border = 'none';
+                    }
+                    if (customTpl.borderRadius) tpl.style.borderRadius = `${customTpl.borderRadius}px`;
+                    else tpl.style.borderRadius = '0';
+                } else {
+                    tpl.style.backgroundColor = 'transparent';
+                    tpl.style.backgroundImage = 'none';
+                    tpl.style.fontFamily = 'sans-serif';
+                    tpl.style.border = 'none';
+                    tpl.style.borderRadius = '0';
+                }
+
+                // Surcharger avec le CSS personnalisé
+                const oldStyle = document.getElementById('custom-player-template-styles');
+                if (oldStyle) oldStyle.remove();
+                if (customTpl && customTpl.customCss) {
+                    const style = document.createElement('style');
+                    style.id = 'custom-player-template-styles';
+                    style.textContent = customTpl.customCss.replace(/([^\r\n,{}]+)(,(?=[^}]*{)|(?=[^{]*{))/g, '.tpl-container $1$2');
+                    document.head.appendChild(style);
+                }
 
                 if (page.template === 'canteen') {
                     const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -778,13 +898,41 @@
 
                     const renderCanteen = (weekData) => {
                         const menu = (weekData && weekData[today]) ? weekData[today] : { starter: 'Non renseignée', main: 'Non renseigné', dessert: 'Non renseigné' };
-                        tpl.innerHTML = `
-                            <div class="tpl-header">${page.data.title || 'MENU DU JOUR'} (${today})</div>
-                            <div class="tpl-content">
-                                <div class="tpl-row"><div class="tpl-label">ENTRÉE</div><div class="tpl-value">${menu.starter || 'Non renseignée'}</div></div>
-                                <div class="tpl-row"><div class="tpl-label">PLAT</div><div class="tpl-value">${menu.main || 'Non renseigné'}</div></div>
-                                <div class="tpl-row"><div class="tpl-label">DESSERT</div><div class="tpl-value">${menu.dessert || 'Non renseigné'}</div></div>
-                            </div>`;
+                        const title = page.data.title || 'MENU DU JOUR';
+                        
+                        if (customTpl && customTpl.customHtml) {
+                            let html = customTpl.customHtml;
+                            html = html.replace(/{{title}}/g, title)
+                                       .replace(/{{day}}/g, today)
+                                       .replace(/{{starter}}/g, menu.starter || 'Non renseignée')
+                                       .replace(/{{main}}/g, menu.main || 'Non renseigné')
+                                       .replace(/{{dessert}}/g, menu.dessert || 'Non renseigné');
+                            tpl.innerHTML = html;
+                        } else {
+                            const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
+                            const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize) * scaleRatio}px` : '5vw';
+                            const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#ffffff';
+                            const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * scaleRatio}px` : '3vw';
+                            const labelColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
+                            const labelSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.8 * scaleRatio}px` : '2vw';
+
+                            tpl.innerHTML = `
+                                <div class="tpl-header" style="color:${titleColor}; font-size:${titleSize}; border-bottom-color:${titleColor};">${title} (${today})</div>
+                                <div class="tpl-content">
+                                    <div class="tpl-row" style="color:${textColor};">
+                                        <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">ENTRÉE</div>
+                                        <div class="tpl-value" style="font-size:${textSize};">${menu.starter || 'Non renseignée'}</div>
+                                    </div>
+                                    <div class="tpl-row" style="color:${textColor};">
+                                        <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">PLAT</div>
+                                        <div class="tpl-value" style="font-size:${textSize};">${menu.main || 'Non renseigné'}</div>
+                                    </div>
+                                    <div class="tpl-row" style="color:${textColor};">
+                                        <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">DESSERT</div>
+                                        <div class="tpl-value" style="font-size:${textSize};">${menu.dessert || 'Non renseigné'}</div>
+                                    </div>
+                                </div>`;
+                        }
                     };
                     
                     if (isLive) {
@@ -815,18 +963,46 @@
                                 renderCanteen({});
                             });
                     } else {
-                        tpl.innerHTML = `
-                            <div class="tpl-header">${page.data.title || 'MENU CANTINE'}</div>
-                            <div class="tpl-content">
-                                <div class="tpl-row"><div class="tpl-label">ENTRÉE</div><div class="tpl-value">${page.data.starter || 'Non renseignée'}</div></div>
-                                <div class="tpl-row"><div class="tpl-label">PLAT</div><div class="tpl-value">${page.data.main || 'Non renseigné'}</div></div>
-                                <div class="tpl-row"><div class="tpl-label">DESSERT</div><div class="tpl-value">${page.data.dessert || 'Non renseigné'}</div></div>
-                            </div>`;
+                        const title = page.data.title || 'MENU CANTINE';
+                        if (customTpl && customTpl.customHtml) {
+                            let html = customTpl.customHtml;
+                            html = html.replace(/{{title}}/g, title)
+                                       .replace(/{{day}}/g, 'Menu du jour')
+                                       .replace(/{{starter}}/g, page.data.starter || 'Non renseignée')
+                                       .replace(/{{main}}/g, page.data.main || 'Non renseigné')
+                                       .replace(/{{dessert}}/g, page.data.dessert || 'Non renseigné');
+                            tpl.innerHTML = html;
+                        } else {
+                            const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
+                            const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize) * scaleRatio}px` : '5vw';
+                            const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#ffffff';
+                            const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * scaleRatio}px` : '3vw';
+                            const labelColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
+                            const labelSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.8 * scaleRatio}px` : '2vw';
+
+                            tpl.innerHTML = `
+                                <div class="tpl-header" style="color:${titleColor}; font-size:${titleSize}; border-bottom-color:${titleColor};">${title}</div>
+                                <div class="tpl-content">
+                                    <div class="tpl-row" style="color:${textColor};">
+                                        <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">ENTRÉE</div>
+                                        <div class="tpl-value" style="font-size:${textSize};">${page.data.starter || 'Non renseignée'}</div>
+                                    </div>
+                                    <div class="tpl-row" style="color:${textColor};">
+                                        <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">PLAT</div>
+                                        <div class="tpl-value" style="font-size:${textSize};">${page.data.main || 'Non renseigné'}</div>
+                                    </div>
+                                    <div class="tpl-row" style="color:${textColor};">
+                                        <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">DESSERT</div>
+                                        <div class="tpl-value" style="font-size:${textSize};">${page.data.dessert || 'Non renseigné'}</div>
+                                    </div>
+                                </div>`;
+                        }
                     }
                 } else if (page.template === 'meeting') {
                     const isLive = page.data && page.data.useLiveMeeting !== false;
                     const dId = (playlistData && playlistData.deviceId) ? playlistData.deviceId : '';
                     const sId = (playlistData && playlistData.siteId) ? playlistData.siteId : '';
+                    const roomName = page.data.room || 'Salle de Réunion';
 
                     const renderMeetings = (data) => {
                         const allMeetings = (data && data.meetings) ? data.meetings : [];
@@ -844,13 +1020,27 @@
                             return isNaN(endDate.getTime()) || endDate > now;
                         });
 
+                        // roomName is defined in the outer scope
+
                         if (activeMeetings.length === 0) {
-                            tpl.innerHTML = `
-                                <div class="tpl-meeting-room">${page.data.room || 'SALLE DE RÉUNION'}</div>
-                                <div style="font-size: 2.5vw; color: #2ecc71; margin-top: 15px;">🟢 Aucune réunion à venir</div>`;
+                            if (customTpl && customTpl.customHtml) {
+                                let html = customTpl.customHtml;
+                                html = html.replace(/{{room}}/g, roomName)
+                                           .replace(/{{subject}}/g, 'Aucune réunion à venir')
+                                           .replace(/{{status}}/g, 'Disponible')
+                                           .replace(/{{startTime}}/g, '')
+                                           .replace(/{{endTime}}/g, '');
+                                tpl.innerHTML = html;
+                            } else {
+                                const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#ffffff';
+                                const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize) * scaleRatio}px` : '8vw';
+                                tpl.innerHTML = `
+                                    <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">${roomName}</div>
+                                    <div style="font-size: 3vw; color: #2ecc71; margin-top: 3vh;">🟢 Aucune réunion à venir</div>`;
+                            }
                         } else {
                             const firstM = activeMeetings[0];
-                            const room = (data.rooms || []).find(r => r.id === firstM.roomId) || { name: page.data.room || 'Salle' };
+                            const room = (data.rooms || []).find(r => r.id === firstM.roomId) || { name: roomName };
                             
                             let startIso = firstM.startTime;
                             let endIso = firstM.endTime;
@@ -870,29 +1060,42 @@
                             const startDisplay = firstM.startTime ? (firstM.startTime.includes('T') ? firstM.startTime.substring(11, 16) : firstM.startTime) : '';
                             const endDisplay = firstM.endTime ? (firstM.endTime.includes('T') ? firstM.endTime.substring(11, 16) : firstM.endTime) : '';
 
-                            const statusHtml = isInProgress
-                                ? `<div class="tpl-meeting-status status-occupied" style="background:#e74c3c; color:white;">🔴 EN COURS</div>`
-                                : `<div class="tpl-meeting-status status-disponible" style="background:#3498db; color:white;">🔵 PROCHAINE RÉUNION</div>`;
+                            const status = isInProgress ? 'Occupée' : 'Prochaine réunion';
+                            const badgeAvailable = (customTpl && customTpl.badgeBgAvailable) ? customTpl.badgeBgAvailable : '#3498db';
+                            const badgeBusy = (customTpl && customTpl.badgeBgBusy) ? customTpl.badgeBgBusy : '#e74c3c';
+                            const bgBadge = isInProgress ? badgeBusy : badgeAvailable;
 
-                            tpl.innerHTML = `
-                                <div class="tpl-meeting-room">📍 ${room.name}</div>
-                                <div style="font-size: 3vw; font-weight: bold; margin: 15px 0;">${firstM.title || 'Réunion'}</div>
-                                <div style="font-size: 2vw; color: #3498db; margin-bottom: 15px;">⏰ ${startDisplay} - ${endDisplay} ${firstM.organizer ? '• ' + firstM.organizer : ''}</div>
-                                ${statusHtml}`;
+                            if (customTpl && customTpl.customHtml) {
+                                let html = customTpl.customHtml;
+                                html = html.replace(/{{room}}/g, room.name)
+                                           .replace(/{{subject}}/g, firstM.title || 'Réunion')
+                                           .replace(/{{status}}/g, status)
+                                           .replace(/{{startTime}}/g, startDisplay)
+                                           .replace(/{{endTime}}/g, endDisplay);
+                                tpl.innerHTML = html;
+                            } else {
+                                const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#ffffff';
+                                const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize) * scaleRatio}px` : '8vw';
+                                const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#bdc3c7';
+                                const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * scaleRatio}px` : '3vw';
+                                const subTextSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.7 * scaleRatio}px` : '2vw';
+
+                                tpl.innerHTML = `
+                                    <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">${room.name}</div>
+                                    <div style="font-size:${textSize}; font-weight: bold; margin: 2vh 0; color:${textColor};">${firstM.title || 'Réunion'}</div>
+                                    <div style="font-size:${subTextSize}; opacity: 0.8; margin-bottom: 4vh; color:${textColor};">⏱️ ${startDisplay} - ${endDisplay}</div>
+                                    <div class="tpl-meeting-status" style="background:${bgBadge}; color:white; padding: 2vh 5vh; font-size: ${subTextSize}; border-radius: 30px; display: inline-block;">${status.toUpperCase()}</div>`;
+                            }
                         }
                     };
-
+                    
                     if (isLive) {
-                        tpl.innerHTML = `<div class="tpl-header">Chargement des réunions...</div>`;
+                        tpl.innerHTML = `<div style="font-size:8vw; font-weight:bold; margin-bottom:10px;">${roomName}</div><div id="meeting-loader" style="font-size: 2vw;">Chargement des réunions...</div>`;
                         fetch(`${targetServerUrl}/api/player/meetings/today?deviceId=${encodeURIComponent(dId)}&siteId=${encodeURIComponent(sId)}`)
-                            .then(r => {
-                                if (!r.ok) throw new Error("HTTP " + r.status);
-                                return r.json();
-                            })
+                            .then(r => r.json())
                             .then(data => {
-                                if (data && data.meetings) {
-                                    try { localStorage.setItem('cached_meetings_data', JSON.stringify(data)); } catch(e){}
-                                }
+                                const loader = tpl.querySelector('#meeting-loader');
+                                if (loader) loader.remove();
                                 renderMeetings(data);
                             })
                             .catch(async () => {
@@ -911,10 +1114,32 @@
                             });
                     } else {
                         const statusClass = (page.data.status || 'disponible').toLowerCase();
-                        tpl.innerHTML = `
-                            <div class="tpl-meeting-room">${page.data.room || 'Salle de Réunion'}</div>
-                            <div style="font-size: 3vw; opacity: 0.8;">${page.data.subject || 'Objet non renseigné'}</div>
-                            <div class="tpl-meeting-status status-${statusClass}">${page.data.status || 'Disponible'}</div>`;
+                        const status = page.data.status || 'Disponible';
+                        const subject = page.data.subject || 'Objet non renseigné';
+                        // roomName is defined in the outer scope
+
+                        if (customTpl && customTpl.customHtml) {
+                            let html = customTpl.customHtml;
+                            html = html.replace(/{{room}}/g, roomName)
+                                       .replace(/{{subject}}/g, subject)
+                                       .replace(/{{status}}/g, status)
+                                       .replace(/{{startTime}}/g, '')
+                                       .replace(/{{endTime}}/g, '');
+                            tpl.innerHTML = html;
+                        } else {
+                            const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#ffffff';
+                            const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize) * scaleRatio}px` : '8vw';
+                            const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#bdc3c7';
+                            const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * scaleRatio}px` : '3vw';
+                            const badgeAvailable = (customTpl && customTpl.badgeBgAvailable) ? customTpl.badgeBgAvailable : '#3498db';
+                            const badgeBusy = (customTpl && customTpl.badgeBgBusy) ? customTpl.badgeBgBusy : '#e74c3c';
+                            const bgBadge = (status === 'Disponible' || statusClass === 'disponible') ? badgeAvailable : badgeBusy;
+
+                            tpl.innerHTML = `
+                                <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">${roomName}</div>
+                                <div style="color:${textColor}; font-size:${textSize}; margin: 3vh 0;">${subject}</div>
+                                <div class="tpl-meeting-status" style="background:${bgBadge}; color:white; padding: 2vh 5vh; font-size: 2vw; border-radius: 30px; display: inline-block;">${status.toUpperCase()}</div>`;
+                        }
                     }
                 }
                 else if (page.template === 'video_fullscreen') {
@@ -1046,8 +1271,38 @@
                         const panX = zone.webPanX || 0;
                         const panY = zone.webPanY || 0;
                         const iframeUrl = zone.url.startsWith('/') ? mediaUrl : zone.url;
+                        
+                        const ratio = (playlistData.resolution || '16/9').split('/');
+                        const wRatio = parseInt(ratio[0]) || 16;
+                        const hRatio = parseInt(ratio[1]) || 9;
+                        let virtualW = 1920;
+                        let virtualH = 1080;
+                        if (wRatio === 9 && hRatio === 16) {
+                            virtualW = 1080;
+                            virtualH = 1920;
+                        } else if (wRatio === 4 && hRatio === 3) {
+                            virtualW = 1024;
+                            virtualH = 768;
+                        } else if (wRatio < hRatio) {
+                            virtualW = 1080;
+                            virtualH = Math.round(1080 * (hRatio / wRatio));
+                        } else {
+                            virtualW = 1920;
+                            virtualH = Math.round(1920 * (hRatio / wRatio));
+                        }
+
+                        const screenElement = document.getElementById('player-screen') || document.body;
+                        const screenW = parseFloat(screenElement.style.width) || screenElement.offsetWidth || window.innerWidth;
+                        const scaleRatio = screenW / virtualW;
+                        
+                        const zoneVirtualW = virtualW * (zone.w / 100);
+                        const zoneVirtualH = virtualH * (zone.h / 100);
+                        const iframeWidth = zoneVirtualW / zoom;
+                        const iframeHeight = zoneVirtualH / zoom;
+                        const iframeScale = zoom * scaleRatio;
+
                         zoneElement.innerHTML = `<div style="width:100%;height:100%;overflow:hidden;position:relative;">
-                            <iframe src="${iframeUrl}" style="width:${100 / zoom}%;height:${100 / zoom}%;border:none;position:absolute;top:0;left:0;transform:scale(${zoom}) translate(${panX}%,${panY}%);transform-origin:0 0;"></iframe>
+                            <iframe src="${iframeUrl}" style="width:${iframeWidth}px;height:${iframeHeight}px;border:none;position:absolute;top:0;left:0;transform:scale(${iframeScale}) translate(${panX}%,${panY}%);transform-origin:0 0;"></iframe>
                         </div>`;
                     } else if (zone.type === 'qrcode') {
                         const qrText = zone.text || 'https://omnisign.com';
@@ -1055,14 +1310,32 @@
                         const remoteQrUrl = `${targetServerUrl}/api/admin/qrcode?text=${encodeURIComponent(qrText)}${token ? '&apiKey=' + token : ''}`;
                         const qrUrl = zone.localUrl ? mediaUrl : remoteQrUrl;
                         zoneElement.innerHTML = `<img src="${qrUrl}" onerror="if(!this.dataset.fallback){this.dataset.fallback=true;this.src='${remoteQrUrl}';}" style="width:100%;height:100%;object-fit:contain;">`;
-                    } else if (zone.type === 'text') {
+                    } else if (zone.type === 'text' || zone.type === 'paragraph') {
+                        // Calcul du ratio d'échelle pour adapter la taille de texte de manière réactive
+                        const ratio = (playlistData.resolution || '16/9').split('/');
+                        const wRatio = parseInt(ratio[0]) || 16;
+                        const hRatio = parseInt(ratio[1]) || 9;
+                        let virtualW = 1920;
+                        if (wRatio === 9 && hRatio === 16) {
+                            virtualW = 1080;
+                        } else if (wRatio === 4 && hRatio === 3) {
+                            virtualW = 1024;
+                        } else if (wRatio < hRatio) {
+                            virtualW = 1080;
+                        } else {
+                            virtualW = 1920;
+                        }
+                        const playerWidth = window.innerWidth;
+                        const scaleRatio = playerWidth / virtualW;
+                        const scaledFontSize = (zone.fontSize || 24) * scaleRatio;
+
                         const content = zone.isMarquee ? 
                             `<div class="marquee-container"><div class="marquee-content text-content">${zone.text || ''}</div></div>` :
-                            `<div class="text-content">${zone.text || ''}</div>`;
+                            `<div class="text-content" style="width:100%; height:100%; overflow:hidden;">${zone.text || ''}</div>`;
                         zoneElement.innerHTML = content;
                         
                         const textContentDiv = zoneElement.querySelector('.text-content');
-
+ 
                         if (zone.fontFamily && (zone.localFontUrl || zone.fontUrl)) {
                             const fontUrl = zone.localFontUrl || zone.fontUrl;
                             const fontAuth = (previewId && apiKey) ? `&apiKey=${apiKey}` : '';
@@ -1076,17 +1349,38 @@
                                 document.head.appendChild(style);
                             }
                         }
-
+ 
                         textContentDiv.style.fontFamily = zone.fontFamily || 'sans-serif';
-                        textContentDiv.style.fontSize = (zone.fontSize || 24) + 'px';
+                        textContentDiv.style.fontSize = scaledFontSize + 'px';
                         textContentDiv.style.color = zone.color || 'white';
-                        textContentDiv.style.textAlign = zone.textAlign || 'center';
+                        textContentDiv.style.textAlign = zone.textAlign || (zone.type === 'paragraph' ? 'left' : 'center');
+                        if (zone.type === 'paragraph') {
+                            textContentDiv.style.display = 'block';
+                        }
                         // Ajuster la justification pour le flexbox
                         textContentDiv.style.justifyContent = zone.textAlign === 'justify' ? 'flex-start' : zone.textAlign;
                     } else if (zone.type === 'clock') {
+                        // Calcul du ratio d'échelle pour le texte de l'horloge
+                        const ratio = (playlistData.resolution || '16/9').split('/');
+                        const wRatio = parseInt(ratio[0]) || 16;
+                        const hRatio = parseInt(ratio[1]) || 9;
+                        let virtualW = 1920;
+                        if (wRatio === 9 && hRatio === 16) {
+                            virtualW = 1080;
+                        } else if (wRatio === 4 && hRatio === 3) {
+                            virtualW = 1024;
+                        } else if (wRatio < hRatio) {
+                            virtualW = 1080;
+                        } else {
+                            virtualW = 1920;
+                        }
+                        const playerWidth = window.innerWidth;
+                        const scaleRatio = playerWidth / virtualW;
+                        const scaledFontSize = (zone.fontSize || 24) * scaleRatio;
+
                         zoneElement.innerHTML = `<div class="clock-content"></div>`;
                         const clockContent = zoneElement.querySelector('.clock-content');
-
+ 
                         // Appliquer la police personnalisée si définie
                         if (zone.fontFamily && (zone.localFontUrl || zone.fontUrl)) {
                             const fontUrl = zone.localFontUrl || zone.fontUrl;
@@ -1101,25 +1395,11 @@
                                 document.head.appendChild(style);
                             }
                         }
-
+ 
                         clockContent.style.fontFamily = zone.fontFamily || 'sans-serif';
-                        clockContent.style.fontSize = (zone.fontSize || 24) + 'px';
+                        clockContent.style.fontSize = scaledFontSize + 'px';
                         clockContent.style.color = zone.color || 'white';
                         
-                        if (zone.fontFamily && (zone.localFontUrl || zone.fontUrl)) {
-                            const fontUrl = zone.localFontUrl || zone.fontUrl;
-                            const fontAuth = (previewId && apiKey) ? `&apiKey=${apiKey}` : '';
-                            const finalFontUrl = fontUrl.startsWith('/media') ? `${fontUrl}${fontAuth}` : fontUrl;
-                            
-                            const styleId = `font-${zone.fontFamily.replace(/\s+/g, '-')}`;
-                            if (!document.getElementById(styleId)) {
-                                const style = document.createElement('style');
-                                style.id = styleId;
-                                style.textContent = `@font-face { font-family: "${zone.fontFamily}"; src: url("${finalFontUrl}"); }`;
-                                document.head.appendChild(style);
-                            }
-                        }
-
                         const updateTime = () => {
                             clockContent.innerText = formatClock(new Date(), zone.clockFormat || 'HH:mm:ss');
                         };
@@ -1130,7 +1410,6 @@
                     const startMs = zone.start || 0;
                     const durationMs = zone.duration || page.duration || 5000;
                     const endMs = startMs + durationMs;
-
                     if (startMs > 0) {
                         zoneElement.style.display = 'none';
                         setTimeout(() => {
@@ -1191,6 +1470,27 @@
             return 'ℹ️';
         }
 
+        function updateAlertOffset() {
+            const overlay = document.getElementById('alert-overlay');
+            const pageZones = document.getElementById('current-page-zones');
+            if (!pageZones) return;
+
+            if (overlay && overlay.children.length > 0) {
+                let totalHeight = 0;
+                Array.from(overlay.children).forEach(child => {
+                    totalHeight += child.offsetHeight || 0;
+                });
+                if (totalHeight === 0) {
+                    totalHeight = overlay.children.length * (window.innerWidth * 0.025 + 30);
+                }
+                pageZones.style.transform = `translate3d(0, ${totalHeight}px, 0)`;
+                pageZones.style.height = `calc(100% - ${totalHeight}px)`;
+            } else {
+                pageZones.style.transform = 'translate3d(0, 0, 0)';
+                pageZones.style.height = '100%';
+            }
+        }
+
         const alertTimers = {};
 
         function displayAlert(alert) {
@@ -1208,6 +1508,8 @@
                 </div>
             `;
             overlay.appendChild(div);
+            updateAlertOffset();
+            setTimeout(updateAlertOffset, 50);
 
             const textEl = document.getElementById(`marquee-text-${alert.id}`);
             const wrapperEl = textEl.parentElement;
@@ -1240,7 +1542,10 @@
                 delete alertTimers[alertId];
             }
             const el = document.getElementById(`alert-${alertId}`);
-            if (el) el.remove();
+            if (el) {
+                el.remove();
+                updateAlertOffset();
+            }
         }
 
         function renderAlertsFromManifest(alerts) {
@@ -1255,6 +1560,7 @@
             });
 
             alerts.forEach(displayAlert);
+            updateAlertOffset();
         }
 
         function setupSocketListeners() {

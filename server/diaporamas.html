@@ -52,6 +52,32 @@
         #playlists-list.list-view .playlist-card-overlay button { width: auto; height: auto; border-radius: 4px; padding: 10px 15px; font-size: 14px; }
         #playlists-list.list-view .playlist-card-details { padding: 0; }
         #playlists-list.list-view .playlist-card-details strong { font-size: 15px; }
+
+        /* Modal Styles */
+        .modal {
+            display: none; position: fixed; z-index: 3000; left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+            align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background: #2c3e50; padding: 25px; border-radius: 12px; width: 90%; max-width: 550px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); color: white; max-height: 90vh; overflow-y: auto;
+            border: 1px solid #34495e;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block; font-weight: bold; font-size: 0.9em; margin-bottom: 6px; color: white;
+        }
+        .form-group input, .form-group select {
+            width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #34495e;
+            background: #1e2a38; color: white; font-size: 0.95em; box-sizing: border-box;
+        }
+        .seq-item-row {
+            display: flex; justify-content: space-between; align-items: center; background: #1a252f;
+            padding: 8px 12px; margin-bottom: 5px; border-radius: 4px; border: 1px solid #34495e;
+        }
     </style>
     <link rel="stylesheet" href="/assets/theme.css">
     <script src="/assets/theme.js"></script>
@@ -70,6 +96,7 @@
         <button class="secondary" onclick="window.location.href='/canteen'">🍴 Cantine</button>
         <button class="secondary" onclick="window.location.href='/meetings'">🏢 Réunions</button>
         <button class="secondary" onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>
+        <button class="secondary" onclick="window.location.href='/templates'">🎨 Modèles</button>
         <button class="secondary" onclick="window.location.href='/users'">👥 Utilisateurs</button>
         <button class="secondary" onclick="window.location.href='/sites'">🏢 Sites</button>
         <button class="secondary" onclick="window.location.href='/systeme'">⚙️ Système</button>
@@ -89,19 +116,52 @@
         <div id="playlists-list" class="list-view"></div>
     </section>
 
-    <section id="schedules-section">
-        <h2>Agenda des Diffusions</h2>
-        <div style="display: flex; gap: 10px; align-items: end; margin-bottom: 15px; flex-wrap: wrap;">
-            <input type="hidden" id="schedule-id">
-            <div><label>Écran</label><br><select id="schedule-device"></select></div>
-            <div><label>Cible</label><br><select id="schedule-playlist"></select></div>
-            <div><label>Début</label><br><input type="datetime-local" id="schedule-start"></div>
-            <div><label>Fin</label><br><input type="datetime-local" id="schedule-end"></div>
-            <button onclick="saveSchedule()">Planifier</button>
-            <button class="secondary" onclick="resetScheduleForm()">Annuler</button>
+    <section id="sequences-section" style="margin-top: 30px; border-top: 2px solid #34495e; padding-top: 20px;">
+        <h2>Mes Séquences</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <button onclick="openSequenceModal()" style="background: #27ae60; font-weight: bold;">+ Nouvelle Séquence</button>
         </div>
-        <div id="schedules-list"></div>
+        <div id="sequences-list" class="list-view">
+            <!-- Rempli par le script -->
+        </div>
     </section>
+
+    <!-- Modal Création/Modification de Séquence -->
+    <div id="sequence-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="seq-modal-title" style="margin-top: 0; color: #3498db;">Nouvelle Séquence</h3>
+            <form id="sequence-form" onsubmit="saveSequence(event)">
+                <input type="hidden" id="seq-id">
+                
+                <div class="form-group">
+                    <label>Nom de la séquence :</label>
+                    <input type="text" id="seq-name" placeholder="Ex: Playlist alternée, Cantine & Réunions" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Ajouter un diaporama :</label>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="seq-add-select" style="flex: 1;"></select>
+                        <button type="button" onclick="addPlaylistItemToSequence()" style="background: #3498db; padding: 8px 15px; font-weight: bold;">➕ Ajouter</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Diaporamas dans cette séquence (ordre de diffusion) :</label>
+                    <div id="seq-playlist-items-container" style="background: #1a252f; padding: 10px; border-radius: 6px; border: 1px solid #34495e; min-height: 50px;">
+                        <!-- Les items ajoutés s'afficheront ici -->
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                    <button type="button" class="secondary" onclick="closeSequenceModal()">Annuler</button>
+                    <button type="submit" style="background: #2ecc71; font-weight: bold;">💾 Enregistrer la Séquence</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
 
     <script>
         let token = localStorage.getItem('pidyn_token');
@@ -124,6 +184,9 @@
         if (userRole !== 'admin') {
             document.addEventListener('DOMContentLoaded', () => {
                 document.querySelectorAll('nav button[onclick*="/users"], nav button[onclick*="/systeme"], nav button[onclick*="/sites"]').forEach(b => b.style.display = 'none');
+                if (userRole !== 'editor') {
+                    document.querySelectorAll('nav button[onclick*="/templates"]').forEach(b => b.style.display = 'none');
+                }
             });
         }
 
@@ -277,10 +340,13 @@
             }
         }
 
+        let globalSequences = {};
+
         async function load() {
             const res = await fetch('/api/admin/data', { headers: { 'Authorization': `Bearer ${token}` } });
             const { players, playlists, sequences } = await res.json();
             globalPlaylists = playlists;
+            globalSequences = sequences || {};
 
             setLayoutMode(layoutMode);
 
@@ -333,16 +399,14 @@
                 </div>`;
             }).join('');
 
-            document.getElementById('schedule-device').innerHTML = Object.keys(players).map(id => `<option value="${id}">${players[id].name}</option>`).join('');
-            document.getElementById('schedule-playlist').innerHTML = '<option value="">Choisir...</option>' + 
-                Object.keys(playlists).map(id => {
-                    const p = playlists[id];
-                    const statusLabel = p.status && p.status !== 'approved' ? ` (${p.status === 'pending' ? 'En attente' : 'Brouillon'})` : '';
-                    return `<option value="p:${id}">Diaporama: ${p.name}${statusLabel}</option>`;
-                }).join('') +
-                Object.keys(sequences).map(id => `<option value="s:${id}">Séquence: ${sequences[id].name}</option>`).join('');
+            renderSequences();
             
-            loadSchedules();
+            if (window.location.hash === '#sequences-section') {
+                setTimeout(() => {
+                    const el = document.getElementById('sequences-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }, 200);
+            }
         }
 
         async function deletePlaylist(id) {
@@ -385,70 +449,7 @@
         }
         window.approvePlaylist = approvePlaylist;
 
-        async function loadSchedules() {
-            try {
-                const res = await fetch('/api/admin/schedules', { headers: { 'Authorization': `Bearer ${token}` } });
-                if (!res.ok) {
-                    const section = document.getElementById('schedules-section');
-                    if (section) section.style.display = 'none';
-                    return;
-                }
-                const schedules = await res.json();
-                document.getElementById('schedules-list').innerHTML = '<table><tr><th>Écran</th><th>Cible</th><th>Début</th><th>Fin</th><th>Action</th></tr>' +
-                    schedules.map(s => `<tr>
-                        <td>${s.deviceId}</td>
-                        <td>${s.playlistId || s.sequenceId}</td>
-                        <td>${new Date(s.startTime).toLocaleString()}</td>
-                        <td>${new Date(s.endTime).toLocaleString()}</td>
-                        <td>
-                            <button class="secondary" onclick="editSchedule('${s.id}')">✏️</button>
-                            <button class="danger" onclick="deleteSchedule('${s.id}')">🗑️</button>
-                        </td>
-                    </tr>`).join('') + '</table>';
-            } catch (e) {
-                console.warn("Impossible de charger le planning des diffusions :", e);
-                const section = document.getElementById('schedules-section');
-                if (section) section.style.display = 'none';
-            }
-        }
 
-        async function saveSchedule() {
-            const id = document.getElementById('schedule-id').value;
-            const deviceId = document.getElementById('schedule-device').value;
-            const target = document.getElementById('schedule-playlist').value;
-            const startTime = document.getElementById('schedule-start').value;
-            const endTime = document.getElementById('schedule-end').value;
-            if (!deviceId || !target || !startTime || !endTime) return;
-            let playlistId = target.startsWith('p:') ? target.substring(2) : null;
-            let sequenceId = target.startsWith('s:') ? target.substring(2) : null;
-            await fetch('/api/admin/schedules', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ id, deviceId, playlistId, sequenceId, startTime, endTime })
-            });
-            resetScheduleForm();
-            loadSchedules();
-        }
-
-        async function editSchedule(id) {
-            const res = await fetch('/api/admin/schedules', { headers: { 'Authorization': `Bearer ${token}` } });
-            const schedules = await res.json();
-            const s = schedules.find(x => String(x.id) === String(id));
-            if (s) {
-                document.getElementById('schedule-id').value = s.id;
-                document.getElementById('schedule-device').value = s.deviceId;
-                document.getElementById('schedule-playlist').value = s.playlistId ? `p:${s.playlistId}` : `s:${s.sequenceId}`;
-                document.getElementById('schedule-start').value = s.startTime.substring(0, 16);
-                document.getElementById('schedule-end').value = s.endTime.substring(0, 16);
-            }
-        }
-
-        async function deleteSchedule(id) { if (confirm('Supprimer ?')) { await fetch(`/api/admin/schedules/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); loadSchedules(); } }
-        function resetScheduleForm() {
-            document.getElementById('schedule-id').value = '';
-            document.getElementById('schedule-playlist').value = '';
-            document.getElementById('schedule-start').value = '';
-            document.getElementById('schedule-end').value = '';
-        }
 
         function startThumbnailAnimation(cardEl, playlistId) {
             console.log("startThumbnailAnimation called for", playlistId, "layoutMode:", layoutMode);
@@ -504,6 +505,189 @@
             
             const firstItem = (playlist.items && playlist.items.length > 0) ? playlist.items[0] : null;
             renderPageInThumbnail(thumbnailEl, playlist, firstItem);
+        }
+
+        // Functions for Sequences UI
+        let currentSequenceItems = [];
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function renderSequences() {
+            const container = document.getElementById('sequences-list');
+            if (!container) return;
+            
+            const keys = Object.keys(globalSequences);
+            if (keys.length === 0) {
+                container.innerHTML = `<p style="color: #bdc3c7; font-style: italic; padding: 10px;">Aucune séquence créée.</p>`;
+                return;
+            }
+            
+            container.innerHTML = keys.map(id => {
+                const seq = globalSequences[id];
+                const playlistNames = seq.playlistIds.map(plId => {
+                    return globalPlaylists[plId] ? globalPlaylists[plId].name : `Diaporama inconnu (${plId})`;
+                }).join(' ➔ ');
+                
+                return `
+                <div class="playlist-card" style="flex-direction: row; align-items: center; justify-content: space-between; padding: 12px 15px; border-radius: 6px; background: #34495e; border: none; box-shadow: 0 1px 3px rgba(0,0,0,0.2); margin-bottom: 8px;">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <strong style="font-size: 15px; color: #ecf0f1;">🎞️ Séquence : ${escapeHtml(seq.name)}</strong>
+                        <span style="font-size: 12px; color: #bdc3c7;">Chemin : ${escapeHtml(playlistNames || 'Aucun diaporama')}</span>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" class="secondary" onclick="editSequence('${id}')" title="Modifier la séquence" style="padding: 10px 15px; font-size: 14px; border-radius: 4px;">✏️</button>
+                        <button type="button" class="danger" onclick="deleteSequence('${id}')" title="Supprimer la séquence" style="padding: 10px 15px; font-size: 14px; border-radius: 4px;">🗑️</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function openSequenceModal(seq = null) {
+            document.getElementById('sequence-form').reset();
+            const selectEl = document.getElementById('seq-add-select');
+            
+            // Remplir le sélecteur avec les diaporamas
+            let selectHtml = '<option value="">Choisir un diaporama...</option>';
+            for (let plId in globalPlaylists) {
+                selectHtml += `<option value="${plId}">${escapeHtml(globalPlaylists[plId].name)}</option>`;
+            }
+            selectEl.innerHTML = selectHtml;
+
+            if (seq) {
+                document.getElementById('seq-modal-title').innerText = "Modifier la Séquence";
+                document.getElementById('seq-id').value = seq.id;
+                document.getElementById('seq-name').value = seq.name;
+                currentSequenceItems = [...seq.playlistIds];
+            } else {
+                document.getElementById('seq-modal-title').innerText = "Nouvelle Séquence";
+                document.getElementById('seq-id').value = '';
+                document.getElementById('seq-name').value = '';
+                currentSequenceItems = [];
+            }
+            
+            renderSequenceItems();
+            document.getElementById('sequence-modal').style.display = 'flex';
+        }
+
+        function renderSequenceItems() {
+            const container = document.getElementById('seq-playlist-items-container');
+            if (currentSequenceItems.length === 0) {
+                container.innerHTML = `<div style="color: #7f8c8d; font-style: italic; text-align: center; padding: 10px;">Aucun diaporama dans la séquence.</div>`;
+                return;
+            }
+            
+            container.innerHTML = currentSequenceItems.map((plId, index) => {
+                const playlist = globalPlaylists[plId];
+                const plName = playlist ? playlist.name : `Diaporama inconnu (${plId})`;
+                return `
+                <div class="seq-item-row" style="margin-bottom: 5px;">
+                    <span style="font-weight: bold; font-size: 0.95em;">${index + 1}. ${escapeHtml(plName)}</span>
+                    <div style="display: flex; gap: 5px;">
+                        <button type="button" onclick="moveSequenceItem(${index}, -1)" ${index === 0 ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''} style="padding: 4px 8px; background: #34495e;">🔼</button>
+                        <button type="button" onclick="moveSequenceItem(${index}, 1)" ${index === currentSequenceItems.length - 1 ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''} style="padding: 4px 8px; background: #34495e;">🔽</button>
+                        <button type="button" onclick="removeSequenceItem(${index})" style="padding: 4px 8px; background: #e74c3c;">❌</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function addPlaylistItemToSequence() {
+            const selectEl = document.getElementById('seq-add-select');
+            const plId = selectEl.value;
+            if (!plId) return;
+            currentSequenceItems.push(plId);
+            renderSequenceItems();
+            selectEl.value = '';
+        }
+
+        function removeSequenceItem(index) {
+            currentSequenceItems.splice(index, 1);
+            renderSequenceItems();
+        }
+
+        function moveSequenceItem(index, direction) {
+            const targetIdx = index + direction;
+            if (targetIdx < 0 || targetIdx >= currentSequenceItems.length) return;
+            
+            const temp = currentSequenceItems[index];
+            currentSequenceItems[index] = currentSequenceItems[targetIdx];
+            currentSequenceItems[targetIdx] = temp;
+            
+            renderSequenceItems();
+        }
+
+        function closeSequenceModal() {
+            document.getElementById('sequence-modal').style.display = 'none';
+        }
+
+        async function saveSequence(event) {
+            event.preventDefault();
+            const id = document.getElementById('seq-id').value;
+            const name = document.getElementById('seq-name').value;
+            
+            if (currentSequenceItems.length === 0) {
+                alert('Veuillez ajouter au moins un diaporama à la séquence.');
+                return;
+            }
+            
+            const body = {
+                id: id || undefined,
+                name: name,
+                playlistIds: currentSequenceItems
+            };
+            
+            try {
+                const res = await fetch('/api/admin/sequences', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                if (res.ok) {
+                    closeSequenceModal();
+                    await load();
+                } else {
+                    const txt = await res.text();
+                    alert('Erreur lors de la sauvegarde : ' + txt);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Erreur réseau lors de la sauvegarde.');
+            }
+        }
+
+        async function editSequence(id) {
+            const seq = globalSequences[id];
+            if (seq) {
+                openSequenceModal(seq);
+            }
+        }
+
+        async function deleteSequence(id) {
+            if (!confirm('Supprimer cette séquence ? Cela la supprimera également de tout planning associé.')) return;
+            
+            try {
+                const res = await fetch(`/api/admin/sequences/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (res.ok) {
+                    await load();
+                } else {
+                    const txt = await res.text();
+                    alert('Erreur lors de la suppression : ' + txt);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Erreur réseau lors de la suppression.');
+            }
         }
 
         load();

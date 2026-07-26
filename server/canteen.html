@@ -85,6 +85,9 @@
             if (role !== 'cook') {
                 html += `<button class="secondary" onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>`;
             }
+            if (role === 'admin' || role === 'editor') {
+                html += `<button class="secondary" onclick="window.location.href='/templates'">🎨 Modèles</button>`;
+            }
             if (role === 'admin') {
                 html += `<button class="secondary" onclick="window.location.href='/users'">👥 Utilisateurs</button>`;
                 html += `<button class="secondary" onclick="window.location.href='/sites'">🏢 Sites</button>`;

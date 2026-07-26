@@ -20,7 +20,11 @@ const originalLog = console.log;
 console.log = (...args) => {
     const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
     const formatted = `[${new Date().toLocaleString()}] ${msg}`;
-    originalLog(formatted);
+    try {
+        originalLog(formatted);
+    } catch (e) {
+        // Ignorer si la sortie standard n'est plus disponible (ex: tty fermé)
+    }
     logBuffer.push(formatted);
     if (logBuffer.length > maxLogLines) logBuffer.shift();
 };
@@ -29,13 +33,30 @@ const originalError = console.error;
 console.error = (...args) => {
     const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
     const formatted = `[${new Date().toLocaleString()}] ❌ ${msg}`;
-    originalError(formatted);
+    try {
+        originalError(formatted);
+    } catch (e) {
+        // Ignorer si la sortie d'erreur n'est plus disponible
+    }
     logBuffer.push(formatted);
     if (logBuffer.length > maxLogLines) logBuffer.shift();
 };
 
+// Ignorer les erreurs d'écriture asynchrones sur stdout/stderr (EPIPE/EIO)
+process.stdout.on('error', (err) => {
+    if (err.code !== 'EPIPE' && err.code !== 'EIO') {
+        try { originalLog('Err stdout:', err); } catch (e) {}
+    }
+});
+process.stderr.on('error', (err) => {
+    if (err.code !== 'EPIPE' && err.code !== 'EIO') {
+        try { originalLog('Err stderr:', err); } catch (e) {}
+    }
+});
+
 // Global exception handlers to prevent background crashes
 process.on('uncaughtException', (err) => {
+    if (err && (err.code === 'EPIPE' || err.code === 'EIO')) return; // Ignorer les déconnexions de TTY
     console.error('🔥 [CRASH ÉVITÉ] Exception non gérée :', err.stack || err.message || err);
 });
 process.on('unhandledRejection', (reason, promise) => {
@@ -317,6 +338,13 @@ async function syncPlaylist(playlistData) {
         const meetingsRes = await axios.get(resolveMediaUrl(`/api/player/meetings/today?deviceId=${DEVICE_ID}`), { timeout: 5000 });
         if (meetingsRes.data && meetingsRes.data.meetings) {
             await fs.writeJson(path.join(APP_DIR, 'meetings.json'), meetingsRes.data, { spaces: 2 });
+        }
+    } catch (e) {}
+
+    try {
+        const templatesRes = await axios.get(resolveMediaUrl(`/api/player/templates?siteId=${localPlaylist.siteId || ''}`), { timeout: 5000 });
+        if (templatesRes.data) {
+            await fs.writeJson(path.join(APP_DIR, 'templates.json'), templatesRes.data, { spaces: 2 });
         }
     } catch (e) {}
 

@@ -6,7 +6,8 @@
         body, html { margin: 0; padding: 0; background: black; overflow: hidden; height: 100vh; width: 100vw; }
         
         #player-screen {
-            position: relative; width: 100%; height: 100%; overflow: hidden; background-color: black;
+            position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; overflow: hidden; background-color: black;
+            transform-origin: center center;
         }
         #player-screen .bg-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1;
@@ -52,10 +53,35 @@
         .marquee-content { display: inline-block; padding-left: 100%; animation: marquee 15s linear infinite; }
         @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 
+        /* Styles des Templates pour le Rendu Premium */
         #template-preview-layer {
-            position: absolute; inset: 0; z-index: 4; display: none; background: rgba(0,0,0,0.8); 
-            flex-direction: column; justify-content: center; align-items: center; padding: 20px;
-            text-align: center; color: white; font-family: sans-serif;
+            position: absolute;
+            inset: 0;
+            z-index: 4;
+            display: none;
+            color: white;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 9vh;
+            font-family: sans-serif;
+            box-sizing: border-box;
+        }
+        .tpl-header { font-size: 5vw; margin-bottom: 4vh; border-bottom: 3px solid #3498db; padding-bottom: 10px; font-weight: bold; width: 80%; text-align: center; }
+        .tpl-content { display: flex; flex-direction: column; gap: 2vh; width: 80%; }
+        .tpl-row { background: rgba(255,255,255,0.1); padding: 2vh; border-radius: 15px; display: flex; align-items: center; justify-content: space-between; }
+        .tpl-label { color: #3498db; font-size: 2vw; width: 30%; text-align: left; font-weight: bold; }
+        .tpl-value { font-size: 3vw; width: 70%; text-align: right; }
+        
+        .tpl-meeting-room { font-size: 8vw; font-weight: bold; margin-bottom: 2vh; text-align: center; }
+        .tpl-meeting-status { font-size: 2vw; padding: 2vh 5vh; border-radius: 30px; display: inline-block; text-align: center; }
+
+        #current-page-zones {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
         }
     </style>
 </head>
@@ -75,6 +101,7 @@
         let playTimeout = null;
         let activeClockIntervals = [];
         let availableMedia = [];
+        let activeCustomTemplates = {};
 
         const urlParams = new URLSearchParams(window.location.search);
         const previewId = urlParams.get('id');
@@ -108,6 +135,17 @@
                 
                 if (data.playlists && data.playlists[previewId]) {
                     playlistData = data.playlists[previewId];
+                    resizePlayerScreen();
+                    window.addEventListener('resize', resizePlayerScreen);
+
+                    // Charger les templates personnalisés du site
+                    try {
+                        const tplRes = await fetch(`/api/player/templates?siteId=${encodeURIComponent(playlistData.siteId || '')}`);
+                        if (tplRes.ok) activeCustomTemplates = await tplRes.json();
+                    } catch (err) {
+                        console.error("Erreur de chargement des styles de modèles:", err);
+                    }
+
                     document.getElementById('loader').style.display = 'none';
                     if (playlistData.items && playlistData.items.length > 0) {
                         playNext();
@@ -120,6 +158,39 @@
             } catch (e) {
                 document.getElementById('loader').innerText = "Erreur de chargement : " + e.message;
             }
+        }
+
+        function resizePlayerScreen() {
+            const screen = document.getElementById('player-screen');
+            if (!screen) return;
+            const res = playlistData.resolution || '16/9';
+            const ratio = res.split('/');
+            const wRatio = parseInt(ratio[0]) || 16;
+            const hRatio = parseInt(ratio[1]) || 9;
+            
+            const windowW = window.innerWidth;
+            const windowH = window.innerHeight;
+            
+            let virtualW = 1920;
+            let virtualH = 1080;
+            if (wRatio === 9 && hRatio === 16) {
+                virtualW = 1080;
+                virtualH = 1920;
+            } else if (wRatio === 4 && hRatio === 3) {
+                virtualW = 1024;
+                virtualH = 768;
+            }
+            
+            const scaleX = windowW / virtualW;
+            const scaleY = windowH / virtualH;
+            const scale = Math.min(scaleX, scaleY);
+            
+            screen.style.width = `${virtualW}px`;
+            screen.style.height = `${virtualH}px`;
+            screen.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            screen.style.position = 'absolute';
+            screen.style.left = '50%';
+            screen.style.top = '50%';
         }
 
         // Injection dynamique des polices à l'identique de l'éditeur
@@ -165,23 +236,142 @@
                 tplLayer.style.display = 'flex';
                 tplLayer.style.padding = page.template === 'video_fullscreen' ? '0' : '80px 20px 20px 20px';
                 
+                // Appliquer les styles généraux du template personnalisé
+                const customTpl = activeCustomTemplates[page.template];
+                if (customTpl) {
+                    if (customTpl.backgroundColor) tplLayer.style.backgroundColor = customTpl.backgroundColor;
+                    if (customTpl.backgroundUrl) {
+                        tplLayer.style.backgroundImage = `url("${withPreviewAuth(customTpl.backgroundUrl)}")`;
+                        tplLayer.style.backgroundSize = 'cover';
+                        tplLayer.style.backgroundPosition = 'center';
+                    } else {
+                        tplLayer.style.backgroundImage = 'none';
+                    }
+                    if (customTpl.fontFamily) {
+                        tplLayer.style.fontFamily = customTpl.fontFamily.startsWith('font-') ? `"${customTpl.fontFamily}", sans-serif` : customTpl.fontFamily;
+                    }
+                    if (customTpl.borderStyle && customTpl.borderStyle !== 'none') {
+                        tplLayer.style.border = `${customTpl.borderWidth || 0}px ${customTpl.borderStyle} ${customTpl.borderColor || 'transparent'}`;
+                    } else {
+                        tplLayer.style.border = 'none';
+                    }
+                    if (customTpl.borderRadius) tplLayer.style.borderRadius = `${customTpl.borderRadius}px`;
+                    else tplLayer.style.borderRadius = '0';
+                } else {
+                    tplLayer.style.backgroundColor = 'transparent';
+                    tplLayer.style.backgroundImage = 'none';
+                    tplLayer.style.fontFamily = 'sans-serif';
+                    tplLayer.style.border = 'none';
+                    tplLayer.style.borderRadius = '0';
+                }
+
+                // Surcharger avec le CSS personnalisé
+                const oldStyle = document.getElementById('custom-player-template-styles');
+                if (oldStyle) oldStyle.remove();
+                if (customTpl && customTpl.customCss) {
+                    const style = document.createElement('style');
+                    style.id = 'custom-player-template-styles';
+                    style.textContent = customTpl.customCss.replace(/([^\r\n,{}]+)(,(?=[^}]*{)|(?=[^{]*{))/g, '#template-preview-layer $1$2');
+                    document.head.appendChild(style);
+                }
+
                 if (page.template === 'canteen') {
+                    const renderCanteenContent = (title, day, starter, main, dessert) => {
+                        if (customTpl && customTpl.customHtml) {
+                            let html = customTpl.customHtml;
+                            html = html.replace(/{{title}}/g, title)
+                                       .replace(/{{day}}/g, day)
+                                       .replace(/{{starter}}/g, starter)
+                                       .replace(/{{main}}/g, main)
+                                       .replace(/{{dessert}}/g, dessert);
+                            tplLayer.innerHTML = html;
+                        } else {
+                            const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
+                            const titleSize = (customTpl && customTpl.titleFontSize) ? `${customTpl.titleFontSize}px` : '5vw';
+                            const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#ffffff';
+                            const textSize = (customTpl && customTpl.textFontSize) ? `${customTpl.textFontSize}px` : '3vw';
+                            const labelColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
+                            const labelSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.8}px` : '2vw';
+
+                            tplLayer.innerHTML = `
+                                <div class="tpl-header" style="color:${titleColor}; font-size:${titleSize}; border-bottom-color:${titleColor};">${title} (${day})</div>
+                                <div class="tpl-content">
+                                    <div class="tpl-row" style="color:${textColor};">
+                                        <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">ENTRÉE</div>
+                                        <div class="tpl-value" style="font-size:${textSize};">${starter}</div>
+                                    </div>
+                                    <div class="tpl-row" style="color:${textColor};">
+                                        <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">PLAT</div>
+                                        <div class="tpl-value" style="font-size:${textSize};">${main}</div>
+                                    </div>
+                                    <div class="tpl-row" style="color:${textColor};">
+                                        <div class="tpl-label" style="color:${labelColor}; font-size:${labelSize};">DESSERT</div>
+                                        <div class="tpl-value" style="font-size:${textSize};">${dessert}</div>
+                                    </div>
+                                </div>`;
+                        }
+                    };
+
                     if (page.data && page.data.useLiveMenu) {
                         const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                         const today = dayNames[new Date().getDay()];
                         const sId = (playlistData && playlistData.siteId) ? playlistData.siteId : '';
-                        tplLayer.innerHTML = `<div style="color:#3498db; font-weight:bold; font-size:24px; border-bottom:2px solid #3498db; margin-bottom:15px;">${page.data.title || 'MENU CANTINE'} (${today})</div><div id="prev-canteen-content">Chargement du menu du jour...</div>`;
+                        tplLayer.innerHTML = `<div style="color:#bdc3c7;">Chargement du menu du jour...</div>`;
                         fetch(`/api/player/canteen/current?siteId=${encodeURIComponent(sId)}`)
                             .then(r => r.json())
                             .then(weekData => {
                                 const menu = weekData[today] || { starter: 'Non renseignée', main: 'Non renseigné', dessert: 'Non renseigné' };
-                                const cDiv = document.getElementById('prev-canteen-content');
-                                if (cDiv) cDiv.innerHTML = `<p><b>Entrée:</b> ${menu.starter || 'Non renseignée'}</p><p><b>Plat:</b> ${menu.main || 'Non renseigné'}</p><p><b>Dessert:</b> ${menu.dessert || 'Non renseigné'}</p>`;
-                            }).catch(() => {});
+                                renderCanteenContent(page.data.title || 'MENU CANTINE', today, menu.starter || 'Non renseignée', menu.main || 'Non renseigné', menu.dessert || 'Non renseigné');
+                            }).catch(() => {
+                                renderCanteenContent(page.data.title || 'MENU CANTINE', today, 'Non renseignée', 'Non renseigné', 'Non renseigné');
+                            });
                     } else {
-                        tplLayer.innerHTML = `<div style="color:#3498db; font-weight:bold; font-size:24px; border-bottom:2px solid #3498db; margin-bottom:15px;">${page.data.title || 'MENU CANTINE'}</div><div><p><b>Entrée:</b> ${page.data.starter || 'Non renseignée'}</p><p><b>Plat:</b> ${page.data.main || 'Non renseigné'}</p><p><b>Dessert:</b> ${page.data.dessert || 'Non renseigné'}</p></div>`;
+                        renderCanteenContent(page.data.title || 'MENU CANTINE', 'Menu du jour', page.data.starter || 'Non renseignée', page.data.main || 'Non renseigné', page.data.dessert || 'Non renseigné');
                     }
                 } else if (page.template === 'meeting') {
+                    const renderMeetingContent = (room, subject, status, startTime, endTime, isLive = false, activeMeetings = []) => {
+                        if (customTpl && customTpl.customHtml) {
+                            let html = customTpl.customHtml;
+                            if (isLive && activeMeetings.length > 0) {
+                                const firstM = activeMeetings[0];
+                                html = html.replace(/{{room}}/g, room)
+                                           .replace(/{{subject}}/g, firstM.title)
+                                           .replace(/{{status}}/g, status)
+                                           .replace(/{{startTime}}/g, startTime)
+                                           .replace(/{{endTime}}/g, endTime);
+                            } else {
+                                html = html.replace(/{{room}}/g, room)
+                                           .replace(/{{subject}}/g, subject)
+                                           .replace(/{{status}}/g, status)
+                                           .replace(/{{startTime}}/g, startTime)
+                                           .replace(/{{endTime}}/g, endTime);
+                            }
+                            tplLayer.innerHTML = html;
+                        } else {
+                            const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#ffffff';
+                            const titleSize = (customTpl && customTpl.titleFontSize) ? `${customTpl.titleFontSize}px` : '8vw';
+                            const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#bdc3c7';
+                            const textSize = (customTpl && customTpl.textFontSize) ? `${customTpl.textFontSize}px` : '3vw';
+                            const subTextSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.7}px` : '2vw';
+                            const badgeAvailable = (customTpl && customTpl.badgeBgAvailable) ? customTpl.badgeBgAvailable : '#3498db';
+                            const badgeBusy = (customTpl && customTpl.badgeBgBusy) ? customTpl.badgeBgBusy : '#e74c3c';
+                            const bgBadge = status === 'Disponible' ? badgeAvailable : badgeBusy;
+                            
+                            if (isLive) {
+                                tplLayer.innerHTML = `
+                                    <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">${room}</div>
+                                    <div style="font-size:${textSize}; font-weight: bold; margin: 2vh 0; color:${textColor};">${subject}</div>
+                                    ${startTime && endTime ? `<div style="font-size:${subTextSize}; opacity: 0.8; margin-bottom: 4vh; color:${textColor};">⏱️ ${startTime} - ${endTime}</div>` : ''}
+                                    <div class="tpl-meeting-status" style="background:${bgBadge}; color:white; padding: 2vh 5vh; font-size: ${subTextSize}; border-radius: 30px; display: inline-block;">${status.toUpperCase()}</div>`;
+                            } else {
+                                tplLayer.innerHTML = `
+                                    <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">${room}</div>
+                                    <div style="color:${textColor}; font-size:${textSize}; margin: 3vh 0;">${subject}</div>
+                                    <div class="tpl-meeting-status" style="background:${bgBadge}; color:white; padding: 2vh 5vh; font-size: ${subTextSize}; border-radius: 30px; display: inline-block;">${status.toUpperCase()}</div>`;
+                            }
+                        }
+                    };
+
                     if (page.data && page.data.useLiveMeeting) {
                         const sId = (playlistData && playlistData.siteId) ? playlistData.siteId : '';
                         tplLayer.innerHTML = `<div style="font-size:28px; font-weight:bold; margin-bottom:10px;">${page.data.room || 'Toutes les Salles'}</div><div id="prev-meeting-content">Chargement des réunions...</div>`;
@@ -200,10 +390,9 @@
                                     const endDate = new Date(endIso);
                                     return isNaN(endDate.getTime()) || endDate > now;
                                 });
-                                const mDiv = document.getElementById('prev-meeting-content');
-                                if (!mDiv) return;
+                                
                                 if (activeMeetings.length === 0) {
-                                    mDiv.innerHTML = `<div style="color:#2ecc71; font-size:20px; font-weight:bold;">🟢 Aucune réunion à venir</div>`;
+                                    renderMeetingContent(page.data.room || 'Toutes les Salles', '🟢 Aucune réunion à venir', 'Disponible', '', '', true, []);
                                 } else {
                                     const firstM = activeMeetings[0];
                                     const room = (data.rooms || []).find(r => r.id === firstM.roomId) || { name: page.data.room || 'Salle' };
@@ -221,13 +410,17 @@
                                         endIso = `${todayStr}T${endIso}`;
                                     }
                                     const isInProgress = (now >= new Date(startIso) && now < new Date(endIso));
-                                    const badge = isInProgress ? `<span style="color:#e74c3c; font-weight:bold;">🔴 EN COURS</span>` : `<span style="color:#3498db; font-weight:bold;">🔵 PROCHAINE RÉUNION</span>`;
+                                    const badgeLabel = isInProgress ? 'EN COURS' : 'PROCHAINE RÉUNION';
+                                    const statusText = isInProgress ? 'Occupée' : 'Disponible';
                                     
-                                    mDiv.innerHTML = `<div style="font-size:22px; font-weight:bold; margin-bottom:5px;">📍 ${room.name} : ${firstM.title}</div><div style="color:#bdc3c7; font-size:16px;">⏰ ${start} - ${end} • ${badge}</div>`;
+                                    const mContent = `📍 ${room.name} : ${firstM.title} <br> ⏰ ${start} - ${end} • ${badgeLabel}`;
+                                    renderMeetingContent(page.data.room || 'Toutes les Salles', mContent, statusText, start, end, true, activeMeetings);
                                 }
-                            }).catch(() => {});
+                            }).catch(() => {
+                                renderMeetingContent(page.data.room || 'Toutes les Salles', 'Erreur de chargement', 'Inconnu', '', '', true, []);
+                            });
                     } else {
-                        tplLayer.innerHTML = `<div style="font-size:28px; font-weight:bold; margin-bottom:10px;">${page.data.room || 'Salle de Réunion'}</div><div style="color:#bdc3c7; font-size:18px; margin-bottom:20px;">${page.data.subject || 'Sujet de la réunion'}</div><div style="display:inline-block; padding:8px 25px; border-radius:20px; background:${(page.data.status || 'Disponible') === 'Disponible' ? '#27ae60' : '#e74c3c'}; color:white; font-weight:bold;">${page.data.status || 'Disponible'}</div>`;
+                        renderMeetingContent(page.data.room || 'Salle de Réunion', page.data.subject || 'Sujet de la réunion', page.data.status || 'Disponible', '', '');
                     }
                 } else if (page.template === 'video_fullscreen') {
                     if (page.data && page.data.videoUrl) {
@@ -319,23 +512,75 @@
                         const panX = zone.webPanX || 0;
                         const panY = zone.webPanY || 0;
                         const iframeUrl = zone.url.startsWith('/') ? mediaUrl : zone.url;
+                        
+                        const ratio = (playlistData.resolution || '16/9').split('/');
+                        const wRatio = parseInt(ratio[0]) || 16;
+                        const hRatio = parseInt(ratio[1]) || 9;
+                        let virtualW = 1920;
+                        let virtualH = 1080;
+                        if (wRatio === 9 && hRatio === 16) {
+                            virtualW = 1080;
+                            virtualH = 1920;
+                        } else if (wRatio === 4 && hRatio === 3) {
+                            virtualW = 1024;
+                            virtualH = 768;
+                        } else if (wRatio < hRatio) {
+                            virtualW = 1080;
+                            virtualH = Math.round(1080 * (hRatio / wRatio));
+                        } else {
+                            virtualW = 1920;
+                            virtualH = Math.round(1920 * (hRatio / wRatio));
+                        }
+
+                        const screenElement = document.getElementById('player-screen') || document.body;
+                        const screenW = parseFloat(screenElement.style.width) || screenElement.offsetWidth || window.innerWidth;
+                        const scaleRatio = screenW / virtualW;
+                        
+                        const zoneVirtualW = virtualW * (zone.w / 100);
+                        const zoneVirtualH = virtualH * (zone.h / 100);
+                        const iframeWidth = zoneVirtualW / zoom;
+                        const iframeHeight = zoneVirtualH / zoom;
+                        const iframeScale = zoom * scaleRatio;
+
                         zoneElement.innerHTML = `<div style="width:100%;height:100%;overflow:hidden;position:relative;">
-                            <iframe src="${iframeUrl}" style="width:${100 / zoom}%;height:${100 / zoom}%;border:none;position:absolute;top:0;left:0;transform:scale(${zoom}) translate(${panX}%,${panY}%);transform-origin:0 0;"></iframe>
+                            <iframe src="${iframeUrl}" style="width:${iframeWidth}px;height:${iframeHeight}px;border:none;position:absolute;top:0;left:0;transform:scale(${iframeScale}) translate(${panX}%,${panY}%);transform-origin:0 0;"></iframe>
                         </div>`;
                     } else if (zone.type === 'qrcode') {
                         const qrText = zone.text || 'https://pidyn.com';
                         const rawQrUrl = `/api/admin/qrcode?text=${encodeURIComponent(qrText)}`;
                         zoneElement.innerHTML = `<img src="${withPreviewAuth(rawQrUrl)}" style="width:100%;height:100%;object-fit:contain;">`;
-                    } else if (zone.type === 'text') {
+                    }
+                    // Calcul du ratio d'échelle pour adapter la taille de texte de manière réactive
+                    const ratio = (playlistData.resolution || '16/9').split('/');
+                    const wRatio = parseInt(ratio[0]) || 16;
+                    const hRatio = parseInt(ratio[1]) || 9;
+                    let virtualW = 1920;
+                    if (wRatio === 9 && hRatio === 16) {
+                        virtualW = 1080;
+                    } else if (wRatio === 4 && hRatio === 3) {
+                        virtualW = 1024;
+                    } else if (wRatio < hRatio) {
+                        virtualW = 1080;
+                    } else {
+                        virtualW = 1920;
+                    }
+                    const playerWidth = parseFloat(document.getElementById('player-screen').style.width) || window.innerWidth;
+                    const scaleRatio = playerWidth / virtualW;
+                    const scaledFontSize = (zone.fontSize || 24) * scaleRatio;
+
+                    if (zone.type === 'text' || zone.type === 'paragraph') {
                         zoneElement.innerHTML = zone.isMarquee ? 
                             `<div class="marquee-container"><div class="marquee-content text-content">${zone.text || ''}</div></div>` :
-                            `<div class="text-content">${zone.text || ''}</div>`;
+                            `<div class="text-content" style="width:100%; height:100%; overflow:hidden;">${zone.text || ''}</div>`;
                         const txt = zoneElement.querySelector('.text-content');
-                        txt.style.cssText += `font-family:${zone.fontFamily || 'sans-serif'}; font-size:${zone.fontSize || 24}px; color:${zone.color || 'white'}; text-align:${zone.textAlign || 'center'};`;
+                        txt.style.cssText += `font-family:${zone.fontFamily || 'sans-serif'}; font-size:${scaledFontSize}px; color:${zone.color || 'white'}; text-align:${zone.textAlign || (zone.type === 'paragraph' ? 'left' : 'center')};`;
+                        if (zone.type === 'paragraph') {
+                            txt.style.display = 'block';
+                        }
                     } else if (zone.type === 'clock') {
                         zoneElement.innerHTML = `<div class="clock-content"></div>`;
                         const clk = zoneElement.querySelector('.clock-content');
-                        clk.style.cssText += `font-family:${zone.fontFamily || 'sans-serif'}; font-size:${zone.fontSize || 24}px; color:${zone.color || 'white'};`;
+                        clk.style.cssText += `font-family:${zone.fontFamily || 'sans-serif'}; font-size:${scaledFontSize}px; color:${zone.color || 'white'};`;
                         const up = () => clk.innerText = formatClock(new Date(), zone.clockFormat || 'HH:mm:ss');
                         up(); activeClockIntervals.push(setInterval(up, 1000));
                     }

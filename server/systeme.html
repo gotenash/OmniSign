@@ -27,6 +27,7 @@
         <button class="secondary" onclick="window.location.href='/canteen'">🍴 Cantine</button>
         <button class="secondary" onclick="window.location.href='/meetings'">🏢 Réunions</button>
         <button class="secondary" onclick="window.location.href='/mediatheque'">📁 Médiathèque</button>
+        <button class="secondary" onclick="window.location.href='/templates'">🎨 Modèles</button>
         <button class="secondary" onclick="window.location.href='/users'">👥 Utilisateurs</button>
         <button class="secondary" onclick="window.location.href='/sites'">🏢 Sites</button>
         <button onclick="window.location.href='/systeme'">⚙️ Système</button>
@@ -140,10 +141,39 @@
 
     <section>
         <h2>Sauvegarde et Maintenance</h2>
-        <div style="display: flex; gap: 10px;">
-            <button onclick="downloadBackup()" style="background: #27ae60;">📦 Télécharger Sauvegarde</button>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
+            <button id="btn-backup-full" onclick="downloadBackup(false)" style="background: #27ae60;">📦 Sauvegarde Complète (avec médias)</button>
+            <button id="btn-backup-light" onclick="downloadBackup(true)" style="background: #2980b9;">📄 Sauvegarde Légère (base seule)</button>
             <button onclick="document.getElementById('restore-input').click()" style="background: #e67e22;">📂 Restaurer Sauvegarde</button>
             <input type="file" id="restore-input" style="display:none" accept=".zip" onchange="restoreBackup(this)">
+        </div>
+
+        <h3 style="border-bottom: 1px dashed #34495e; padding-bottom: 5px; color: #3498db; font-size: 16px; margin-top: 25px;">Sauvegarde Automatique Périodique</h3>
+        <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05); margin-top: 10px;">
+            <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+                <input type="checkbox" id="set-auto-backup-enabled" style="width: auto; margin: 0;">
+                <label for="set-auto-backup-enabled" style="cursor: pointer; font-weight: bold;">Activer la sauvegarde automatique périodique sur le serveur</label>
+            </div>
+            
+            <div id="auto-backup-settings" style="display: flex; flex-direction: column; gap: 12px; padding-left: 25px; transition: opacity 0.3s ease;">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <label style="margin: 0; font-size: 14px; min-width: 250px;">Fréquence de sauvegarde :</label>
+                    <select id="set-auto-backup-frequency" style="width: 200px; margin: 0; padding: 4px;">
+                        <option value="daily">Tous les jours (Minuit)</option>
+                        <option value="weekly">Toutes les semaines (Dimanche)</option>
+                        <option value="monthly">Tous les mois (1er du mois)</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="set-auto-backup-exclude-media" style="width: auto; margin: 0;">
+                    <label for="set-auto-backup-exclude-media" style="cursor: pointer; font-size: 14px;">Exclure la médiathèque (Sauvegarde légère - Recommandé)</label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="margin: 0; font-size: 14px; min-width: 250px;">Sauvegardes à conserver sur le disque :</label>
+                    <input type="number" id="set-auto-backup-keep-count" style="width: 80px; margin: 0; padding: 4px;" min="1" max="100" value="7">
+                    <span style="font-size: 0.85em; color: #bdc3c7;">(Les plus anciennes seront écrasées pour préserver l'espace)</span>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -398,6 +428,15 @@
                 document.getElementById('set-health-webhook-url').value = settings.health_webhook_url || '';
                 document.getElementById('health-notifications-container').style.opacity = healthEnabled ? '1' : '0.4';
                 document.getElementById('health-notifications-container').style.pointerEvents = healthEnabled ? 'auto' : 'none';
+
+                // Sauvegarde Automatique
+                const autoBackupEnabled = settings.autoBackupEnabled === 'true';
+                document.getElementById('set-auto-backup-enabled').checked = autoBackupEnabled;
+                document.getElementById('set-auto-backup-frequency').value = settings.autoBackupFrequency || 'weekly';
+                document.getElementById('set-auto-backup-exclude-media').checked = settings.autoBackupExcludeMedia !== 'false';
+                document.getElementById('set-auto-backup-keep-count').value = settings.autoBackupKeepCount || '7';
+                document.getElementById('auto-backup-settings').style.opacity = autoBackupEnabled ? '1' : '0.4';
+                document.getElementById('auto-backup-settings').style.pointerEvents = autoBackupEnabled ? 'auto' : 'none';
             }
             
             // Attach event listener once
@@ -422,6 +461,14 @@
                 document.getElementById('set-health-notifications-enabled').addEventListener('change', (e) => {
                     document.getElementById('health-notifications-container').style.opacity = e.target.checked ? '1' : '0.4';
                     document.getElementById('health-notifications-container').style.pointerEvents = e.target.checked ? 'auto' : 'none';
+                });
+            }
+
+            if (!window.hasAutoBackupListener) {
+                window.hasAutoBackupListener = true;
+                document.getElementById('set-auto-backup-enabled').addEventListener('change', (e) => {
+                    document.getElementById('auto-backup-settings').style.opacity = e.target.checked ? '1' : '0.4';
+                    document.getElementById('auto-backup-settings').style.pointerEvents = e.target.checked ? 'auto' : 'none';
                 });
             }
 
@@ -471,6 +518,11 @@
             const health_offline_threshold_minutes = document.getElementById('set-health-offline-threshold').value;
             const health_webhook_url = document.getElementById('set-health-webhook-url').value;
             
+            const autoBackupEnabled = document.getElementById('set-auto-backup-enabled').checked;
+            const autoBackupFrequency = document.getElementById('set-auto-backup-frequency').value;
+            const autoBackupExcludeMedia = document.getElementById('set-auto-backup-exclude-media').checked;
+            const autoBackupKeepCount = document.getElementById('set-auto-backup-keep-count').value;
+            
             if (!confirm("Appliquer ?")) return;
             const res = await fetch('/api/admin/settings', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -478,7 +530,8 @@
                                        periodicScreenshotEnabled, periodicScreenshotInterval,
                                        smtpHost, smtpPort, smtpUser, smtpPass, notificationEmail,
                                        emailNotificationsEnabled, notifyPlaylistChange, notifyPlayerOffline, notifyPlayerOnline, notifyTechAlert, offlineAlertDelay,
-                                       enable_health_notifications, health_offline_threshold_minutes, health_webhook_url })
+                                       enable_health_notifications, health_offline_threshold_minutes, health_webhook_url,
+                                       autoBackupEnabled, autoBackupFrequency, autoBackupExcludeMedia, autoBackupKeepCount })
             });
             if (res.ok) { 
                 alert('Enregistré !'); 
@@ -528,11 +581,42 @@
             }
         }
 
-        async function downloadBackup() {
-            const res = await fetch('/api/admin/backup', { headers: { 'Authorization': `Bearer ${token}` } });
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = `backup_pidyn_${Date.now()}.zip`; a.click();
+        async function downloadBackup(excludeMedia = false) {
+            const btnId = excludeMedia ? 'btn-backup-light' : 'btn-backup-full';
+            const btn = document.getElementById(btnId);
+            const originalText = btn ? btn.innerText : '';
+            
+            try {
+                if (btn) {
+                    btn.innerText = "⏳ Génération...";
+                    btn.disabled = true;
+                }
+                
+                const queryParam = excludeMedia ? '?excludeMedia=true' : '';
+                const res = await fetch(`/api/admin/backup${queryParam}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error(`Code ${res.status}: ${text || 'Erreur inconnue'}`);
+                }
+                
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = excludeMedia ? `backup_light_pidyn_${Date.now()}.zip` : `backup_pidyn_${Date.now()}.zip`;
+                a.click();
+                
+                setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+            } catch (err) {
+                console.error("Erreur de sauvegarde:", err);
+                alert("Impossible de télécharger la sauvegarde : " + err.message);
+            } finally {
+                if (btn) {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            }
         }
 
         async function restoreBackup(input) {

@@ -20,7 +20,11 @@ const originalLog = console.log;
 console.log = (...args) => {
     const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
     const formatted = `[${new Date().toLocaleString()}] ${msg}`;
-    originalLog(formatted);
+    try {
+        originalLog(formatted);
+    } catch (e) {
+        // Ignorer si la sortie standard n'est plus disponible (ex: tty SSH fermé)
+    }
     logBuffer.push(formatted);
     if (logBuffer.length > maxLogLines) logBuffer.shift();
 };
@@ -29,13 +33,30 @@ const originalError = console.error;
 console.error = (...args) => {
     const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
     const formatted = `[${new Date().toLocaleString()}] ❌ ${msg}`;
-    originalError(formatted);
+    try {
+        originalError(formatted);
+    } catch (e) {
+        // Ignorer si la sortie d'erreur n'est plus disponible
+    }
     logBuffer.push(formatted);
     if (logBuffer.length > maxLogLines) logBuffer.shift();
 };
 
+// Ignorer les erreurs d'écriture asynchrones sur stdout/stderr (EPIPE/EIO)
+process.stdout.on('error', (err) => {
+    if (err.code !== 'EPIPE' && err.code !== 'EIO') {
+        try { originalLog('Err stdout:', err); } catch (e) {}
+    }
+});
+process.stderr.on('error', (err) => {
+    if (err.code !== 'EPIPE' && err.code !== 'EIO') {
+        try { originalLog('Err stderr:', err); } catch (e) {}
+    }
+});
+
 // Global exception handlers to prevent background crashes
 process.on('uncaughtException', (err) => {
+    if (err && (err.code === 'EPIPE' || err.code === 'EIO')) return; // Ignorer les déconnexions de TTY
     console.error('🔥 [CRASH ÉVITÉ] Exception non gérée :', err.stack || err.message || err);
 });
 process.on('unhandledRejection', (reason, promise) => {
@@ -359,6 +380,13 @@ async function syncPlaylist(playlistData) {
         }
     } catch (e) {}
 
+    try {
+        const templatesRes = await axios.get(resolveMediaUrl(`/api/player/templates?siteId=${playlistData.siteId || ''}`), { timeout: 5000 });
+        if (templatesRes.data) {
+            await fs.writeJson(path.join(APP_DIR, 'templates.json'), templatesRes.data, { spaces: 2 });
+        }
+    } catch (e) {}
+
     socket.emit('player-status-update', { downloading: false });
     console.log('✅ Playlist et données locales à jour.');
 }
@@ -510,7 +538,7 @@ socket.on('screen-command', (data) => {
     const runEnv = 'export DISPLAY=:0 XAUTHORITY=/home/pi/.Xauthority XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0';
 
     if (action === 'off') {
-        console.log("🛑 Extinction de l'écran (DPMS, Wayland & CEC)...");
+        console.log("🛑 Extinction de l'écran (DPMS, Wayland, GNOME & CEC)...");
         
         // A. Fermer Chromium et unclutter pour libérer la veille
         exec('pkill -f chromium; pkill -f unclutter', () => {
@@ -544,9 +572,13 @@ socket.on('screen-command', (data) => {
             exec('echo "standby 0" | cec-client -s -d 1', (cecErr) => {
                 if (!cecErr) console.log("📺 Commande de veille HDMI-CEC envoyée à la TV.");
             });
+
+            // F. GNOME Mutter via busctl/dbus-send (Wayland & X11 GNOME sessions)
+            exec('busctl --user set-property org.gnome.Mutter.DisplayConfig /org/gnome/Mutter/DisplayConfig org.gnome.Mutter.DisplayConfig PowerSaveMode i 1', () => {});
+            exec('dbus-send --session --dest=org.gnome.ScreenSaver --type=method_call /org/gnome/ScreenSaver org.gnome.ScreenSaver.SetActive boolean:true', () => {});
         });
     } else {
-        console.log("🚀 Allumage de l'écran (DPMS, Wayland & CEC)...");
+        console.log("🚀 Allumage de l'écran (DPMS, Wayland, GNOME & CEC)...");
 
         // A. X11 DPMS
         exec(`${envPrefix} && xset +dpms && xset dpms force on`, (error) => {
@@ -578,6 +610,10 @@ socket.on('screen-command', (data) => {
         exec('echo "on 0" | cec-client -s -d 1', (cecErr) => {
             if (!cecErr) console.log("📺 Commande d'allumage HDMI-CEC envoyée à la TV.");
         });
+
+        // E. GNOME Mutter via busctl/dbus-send (Wayland & X11 GNOME sessions)
+        exec('busctl --user set-property org.gnome.Mutter.DisplayConfig /org/gnome/Mutter/DisplayConfig org.gnome.Mutter.DisplayConfig PowerSaveMode i 0', () => {});
+        exec('dbus-send --session --dest=org.gnome.ScreenSaver --type=method_call /org/gnome/ScreenSaver org.gnome.ScreenSaver.SetActive boolean:false', () => {});
 
         // E. Nettoyer et relancer le player en arrière-plan (avec X11 & Wayland env)
         setTimeout(() => {
