@@ -149,7 +149,7 @@
 
         /* Templates Styles */
         .tpl-container { 
-            width: 100%; height: 100%; color: white; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 9vh; font-family: sans-serif; z-index: 5; 
+            width: 100%; height: 100%; color: white; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 100px; font-family: sans-serif; z-index: 5; 
             box-sizing: border-box;
             will-change: transform;
             transform: translate3d(0,0,0);
@@ -159,14 +159,14 @@
             transform: translate3d(0,0,0);
             backface-visibility: hidden;
         }
-        .tpl-header { font-size: 5vw; margin-bottom: 4vh; border-bottom: 3px solid #3498db; padding-bottom: 10px; font-weight: bold; }
-        .tpl-content { display: flex; flex-direction: column; gap: 2vh; width: 80%; }
-        .tpl-row { background: rgba(255,255,255,0.1); padding: 2vh; border-radius: 15px; display: flex; align-items: center; }
-        .tpl-label { color: #3498db; font-size: 2vw; width: 30%; text-align: left; font-weight: bold; }
-        .tpl-value { font-size: 3vw; width: 70%; text-align: right; }
+        .tpl-header { font-size: 96px; margin-bottom: 43px; border-bottom: 3px solid #3498db; padding-bottom: 10px; font-weight: bold; }
+        .tpl-content { display: flex; flex-direction: column; gap: 22px; width: 80%; }
+        .tpl-row { background: rgba(255,255,255,0.1); padding: 22px; border-radius: 15px; display: flex; align-items: center; }
+        .tpl-label { color: #3498db; font-size: 38px; width: 30%; text-align: left; font-weight: bold; }
+        .tpl-value { font-size: 58px; width: 70%; text-align: right; }
         
-        .tpl-meeting-room { font-size: 8vw; font-weight: bold; margin-bottom: 2vh; }
-        .tpl-meeting-status { font-size: 4vw; padding: 2vh 5vw; border-radius: 100px; margin-top: 4vh; }
+        .tpl-meeting-room { font-size: 154px; font-weight: bold; margin-bottom: 22px; }
+        .tpl-meeting-status { font-size: 38px; padding: 22px 96px; border-radius: 100px; margin-top: 43px; }
         .status-disponible { background: #27ae60; }
         .status-occupée { background: #e74c3c; }
 
@@ -485,6 +485,16 @@
             screen.style.left = '50%';
             screen.style.top = '50%';
             screen.style.transform = 'translate(-50%, -50%)';
+
+            // Mettre à jour l'échelle du template actif si présent et si ce n'est pas video_fullscreen
+            const activeTpl = screen.querySelector('.tpl-container');
+            if (activeTpl && !activeTpl.querySelector('video')) {
+                let designWidth = 1920;
+                if (wRatio < hRatio) designWidth = 1080;
+                else if (wRatio === hRatio) designWidth = 1080;
+                const scale = w / designWidth;
+                activeTpl.style.transform = `scale(${scale})`;
+            }
         }
         window.addEventListener('resize', resizePlayerScreen);
 
@@ -845,8 +855,35 @@
                 tpl.className = 'tpl-container anim-fade-in';
                 const targetServerUrl = playlistData.serverUrl || serverUrl;
                 
-                const playerWidth = window.innerWidth;
-                const scaleRatio = playerWidth / 1920;
+                const res = playlistData.resolution || '16/9';
+                const ratio = res.split('/');
+                const wRatio = parseInt(ratio[0]) || 16;
+                const hRatio = parseInt(ratio[1]) || 9;
+                
+                let designWidth = 1920;
+                let designHeight = 1080;
+                if (wRatio < hRatio) {
+                    designWidth = 1080;
+                    designHeight = 1920;
+                } else if (wRatio === hRatio) {
+                    designWidth = 1080;
+                    designHeight = 1080;
+                }
+                
+                const playerScreen = document.getElementById('player-screen');
+                const playerWidth = playerScreen.clientWidth || window.innerWidth;
+                const scaleRatio = playerWidth / designWidth;
+                
+                if (page.template !== 'video_fullscreen') {
+                    tpl.style.width = designWidth + 'px';
+                    tpl.style.height = designHeight + 'px';
+                    tpl.style.transform = `scale(${scaleRatio})`;
+                    tpl.style.transformOrigin = 'top left';
+                    tpl.style.position = 'absolute';
+                    tpl.style.left = '0';
+                    tpl.style.top = '0';
+                    tpl.style.boxSizing = 'border-box';
+                }
 
                 // Appliquer les styles généraux du template personnalisé
                 const customTpl = activeCustomTemplates[page.template];
@@ -910,11 +947,11 @@
                             tpl.innerHTML = html;
                         } else {
                             const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
-                            const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize) * scaleRatio}px` : '5vw';
+                            const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize)}px` : '96px';
                             const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#ffffff';
-                            const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * scaleRatio}px` : '3vw';
+                            const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize)}px` : '58px';
                             const labelColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
-                            const labelSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.8 * scaleRatio}px` : '2vw';
+                            const labelSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.8}px` : '38px';
 
                             tpl.innerHTML = `
                                 <div class="tpl-header" style="color:${titleColor}; font-size:${titleSize}; border-bottom-color:${titleColor};">${title} (${today})</div>
@@ -974,11 +1011,11 @@
                             tpl.innerHTML = html;
                         } else {
                             const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
-                            const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize) * scaleRatio}px` : '5vw';
+                            const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize)}px` : '96px';
                             const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#ffffff';
-                            const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * scaleRatio}px` : '3vw';
+                            const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize)}px` : '58px';
                             const labelColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
-                            const labelSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.8 * scaleRatio}px` : '2vw';
+                            const labelSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.8}px` : '38px';
 
                             tpl.innerHTML = `
                                 <div class="tpl-header" style="color:${titleColor}; font-size:${titleSize}; border-bottom-color:${titleColor};">${title}</div>
@@ -1073,22 +1110,22 @@
                                 tpl.innerHTML = html;
                             } else {
                                 const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#ffffff';
-                                const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize) * scaleRatio}px` : '8vw';
+                                const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize)}px` : '154px';
                                 const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#bdc3c7';
-                                const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * scaleRatio}px` : '3vw';
-                                const subTextSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.7 * scaleRatio}px` : '2vw';
+                                const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize)}px` : '58px';
+                                const subTextSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.7}px` : '38px';
 
                                 tpl.innerHTML = `
                                     <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">${room.name}</div>
-                                    <div style="font-size:${textSize}; font-weight: bold; margin: 2vh 0; color:${textColor};">${firstM.title || 'Réunion'}</div>
-                                    <div style="font-size:${subTextSize}; opacity: 0.8; margin-bottom: 4vh; color:${textColor};">⏱️ ${startDisplay} - ${endDisplay}</div>
-                                    <div class="tpl-meeting-status" style="background:${bgBadge}; color:white; padding: 2vh 5vh; font-size: ${subTextSize}; border-radius: 30px; display: inline-block;">${status.toUpperCase()}</div>`;
+                                    <div style="font-size:${textSize}; font-weight: bold; margin: 22px 0; color:${textColor};">${firstM.title || 'Réunion'}</div>
+                                    <div style="font-size:${subTextSize}; opacity: 0.8; margin-bottom: 43px; color:${textColor};">⏱️ ${startDisplay} - ${endDisplay}</div>
+                                    <div class="tpl-meeting-status" style="background:${bgBadge}; color:white; padding: 22px 96px; font-size: ${subTextSize}; border-radius: 30px; display: inline-block;">${status.toUpperCase()}</div>`;
                             }
                         }
                     };
                     
                     if (isLive) {
-                        tpl.innerHTML = `<div style="font-size:8vw; font-weight:bold; margin-bottom:10px;">${roomName}</div><div id="meeting-loader" style="font-size: 2vw;">Chargement des réunions...</div>`;
+                        tpl.innerHTML = `<div style="font-size:154px; font-weight:bold; margin-bottom:10px;">${roomName}</div><div id="meeting-loader" style="font-size: 38px;">Chargement des réunions...</div>`;
                         fetch(`${targetServerUrl}/api/player/meetings/today?deviceId=${encodeURIComponent(dId)}&siteId=${encodeURIComponent(sId)}`)
                             .then(r => r.json())
                             .then(data => {
@@ -1125,17 +1162,17 @@
                             tpl.innerHTML = html;
                         } else {
                             const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#ffffff';
-                            const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize) * scaleRatio}px` : '8vw';
+                            const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize)}px` : '154px';
                             const textColor = (customTpl && customTpl.textColor) ? customTpl.textColor : '#bdc3c7';
-                            const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * scaleRatio}px` : '3vw';
+                            const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize)}px` : '58px';
                             const badgeAvailable = (customTpl && customTpl.badgeBgAvailable) ? customTpl.badgeBgAvailable : '#3498db';
                             const badgeBusy = (customTpl && customTpl.badgeBgBusy) ? customTpl.badgeBgBusy : '#e74c3c';
                             const bgBadge = (status === 'Disponible' || statusClass === 'disponible') ? badgeAvailable : badgeBusy;
 
                             tpl.innerHTML = `
                                 <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">${roomName}</div>
-                                <div style="color:${textColor}; font-size:${textSize}; margin: 3vh 0;">${subject}</div>
-                                <div class="tpl-meeting-status" style="background:${bgBadge}; color:white; padding: 2vh 5vh; font-size: 2vw; border-radius: 30px; display: inline-block;">${status.toUpperCase()}</div>`;
+                                <div style="color:${textColor}; font-size:${textSize}; margin: 43px 0;">${subject}</div>
+                                <div class="tpl-meeting-status" style="background:${bgBadge}; color:white; padding: 22px 96px; font-size: 38px; border-radius: 30px; display: inline-block;">${status.toUpperCase()}</div>`;
                         }
                     }
                 }
@@ -1162,7 +1199,7 @@
                     const city = page.data.city || 'Paris';
                     const lat = page.data.lat || '48.8566';
                     const lon = page.data.lon || '2.3522';
-                    tpl.innerHTML = `<div class="tpl-header">MÉTÉO - ${city.toUpperCase()}</div><div id="weather-loader" style="font-size: 2vw;">Chargement des prévisions...</div>`;
+                    tpl.innerHTML = `<div class="tpl-header">MÉTÉO - ${city.toUpperCase()}</div><div id="weather-loader" style="font-size: 38px;">Chargement des prévisions...</div>`;
                     
                     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=weathercode,temperature_2m&timezone=auto`)
                         .then(r => r.json())
@@ -1177,17 +1214,17 @@
                             ];
                             
                             const grid = document.createElement('div');
-                            grid.style.cssText = "display:flex; gap:2vw; justify-content:center; width:90%;";
+                            grid.style.cssText = "display:flex; gap:38px; justify-content:center; width:90%;";
                             
                             periods.forEach(p => {
                                 const icon = getWeatherIcon(data.hourly.weathercode[p.index]);
                                 const temp = Math.round(data.hourly.temperature_2m[p.index]);
                                 grid.innerHTML += `
-                                    <div style="background:rgba(255,255,255,0.1); padding:2vh; border-radius:20px; flex:1; text-align:center;">
-                                        <div style="font-size:1.5vw; color:#3498db; font-weight:bold; margin-bottom:0.5vh;">${p.label}</div>
-                                        <div style="font-size:1.2vw; opacity:0.6; margin-bottom:1vh;">${p.timeLabel}</div>
-                                        <div style="font-size:4vw; margin:1vh 0;">${icon}</div>
-                                        <div style="font-size:2.2vw; font-weight:bold;">${temp}°</div>
+                                    <div style="background:rgba(255,255,255,0.1); padding:22px; border-radius:20px; flex:1; text-align:center;">
+                                        <div style="font-size:29px; color:#3498db; font-weight:bold; margin-bottom:5px;">${p.label}</div>
+                                        <div style="font-size:23px; opacity:0.6; margin-bottom:11px;">${p.timeLabel}</div>
+                                        <div style="font-size:77px; margin:11px 0;">${icon}</div>
+                                        <div style="font-size:42px; font-weight:bold;">${temp}°</div>
                                     </div>`;
                             });
                             tpl.appendChild(grid);

@@ -3,7 +3,10 @@
 if [ -n "$SSH_CLIENT" ] || [ -n "$SSH_TTY" ] || [ -n "$SSH_CONNECTION" ]; then
     export DISPLAY=:0
     USER_UID=$(id -u)
-    if [ -f "/run/user/$USER_UID/gdm/Xauthority" ]; then
+    MUTTER_AUTH=$(find /run/user/$USER_UID/ -name ".mutter-Xwaylandauth.*" 2>/dev/null | head -n 1)
+    if [ -n "$MUTTER_AUTH" ]; then
+        export XAUTHORITY="$MUTTER_AUTH"
+    elif [ -f "/run/user/$USER_UID/gdm/Xauthority" ]; then
         export XAUTHORITY="/run/user/$USER_UID/gdm/Xauthority"
     elif [ -f "$HOME/.Xauthority" ]; then
         export XAUTHORITY="$HOME/.Xauthority"
@@ -48,7 +51,9 @@ fi
 ) &
 
 # Masquer le curseur de la souris (géré proprement via unclutter)
-unclutter -idle 0.5 -root &
+pkill -x unclutter 2>/dev/null
+sleep 0.1
+unclutter -idle 0.5 -root >/dev/null 2>&1 &
 
 # Déterminer le dossier profil Chrome de l'utilisateur actif
 PROFILE_DIR="$HOME/pidyn_chrome_profile"
@@ -56,16 +61,26 @@ PROFILE_DIR="$HOME/pidyn_chrome_profile"
 # Nettoyage préventif du verrou de session Chromium
 if [ -d "$PROFILE_DIR" ]; then
     find "$PROFILE_DIR" -name 'SingletonLock' -delete 2>/dev/null
+    rm -rf "$PROFILE_DIR/Default/Cache" 2>/dev/null
+    rm -rf "$PROFILE_DIR/Default/Code Cache" 2>/dev/null
 fi
 
 # Temporisation active : on attend que le serveur Node.js local réponde sur le port 8080
 # avec une limite de sécurité de 30 secondes
+SERVER_READY=false
 for i in {1..30}; do
     if curl -s -o /dev/null http://127.0.0.1:8080/player; then
+        SERVER_READY=true
         break
     fi
     sleep 1
 done
+
+if [ "$SERVER_READY" = false ]; then
+    echo "⚠️ Le moteur de synchronisation (sync-engine.js) ne semble pas être lancé sur le port 8080."
+    echo "   Veuillez vous assurer que 'node sync-engine.js' est bien démarré dans un autre terminal."
+    echo "   Lancement de Chromium quand même..."
+fi
 
 # Récupération automatique du binaire Chromium / Chrome packagé par l'OS
 CHROMIUM_BIN=$(command -v google-chrome || command -v chromium-browser || command -v chromium)

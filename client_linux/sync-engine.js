@@ -196,6 +196,33 @@ async function getNetworkInfo() {
         }
     } catch (e) {}
 
+    try {
+        let screenResolution = null;
+        try {
+            const { stdout } = await execPromise("xrandr 2>/dev/null | grep '*' | head -n1 | awk '{print $1}'");
+            if (stdout.trim()) screenResolution = stdout.trim();
+        } catch (e) {}
+        if (!screenResolution) {
+            try {
+                const { stdout } = await execPromise("xdpyinfo 2>/dev/null | grep dimensions | awk '{print $2}'");
+                if (stdout.trim()) screenResolution = stdout.trim();
+            } catch (e) {}
+        }
+        if (!screenResolution) {
+            try {
+                const { stdout } = await execPromise("wlr-randr 2>/dev/null | grep -A 1 'Enabled: yes' | grep -v 'Enabled' | awk '{print $1}'");
+                if (stdout.trim()) screenResolution = stdout.trim();
+            } catch (e) {}
+        }
+        if (!screenResolution) {
+            try {
+                const { stdout } = await execPromise("fbset -s 2>/dev/null | grep geometry | awk '{print $2 \"x\" $3}'");
+                if (stdout.trim()) screenResolution = stdout.trim();
+            } catch (e) {}
+        }
+        if (screenResolution) info.screenResolution = screenResolution;
+    } catch (e) {}
+
     return info;
 }
 
@@ -805,6 +832,9 @@ const localServer = http.createServer(async (req, res) => {
                 'Content-Length': fileSize,
                 'Content-Type': contentType,
                 'Accept-Ranges': 'bytes',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
             };
             res.writeHead(200, head);
             const fileStream = fs.createReadStream(filePath);

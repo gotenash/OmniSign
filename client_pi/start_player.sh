@@ -47,21 +47,33 @@ fi
 ) &
 
 # Masquer le curseur de la souris (géré proprement via unclutter)
-unclutter -idle 0.5 -root &
+pkill -x unclutter 2>/dev/null
+sleep 0.1
+unclutter -idle 0.5 -root >/dev/null 2>&1 &
 
 # Nettoyage préventif du verrou de session Chromium
 if [ -d /home/pi/chrome_profile ]; then
     find /home/pi/chrome_profile -name 'SingletonLock' -delete
+    rm -rf /home/pi/chrome_profile/Default/Cache 2>/dev/null
+    rm -rf /home/pi/chrome_profile/Default/Code\ Cache 2>/dev/null
 fi
 
 # Temporisation active : on attend que le serveur Node.js local réponde sur le port 8080
 # avec une limite de sécurité de 30 secondes
+SERVER_READY=false
 for i in {1..30}; do
     if curl -s -o /dev/null http://127.0.0.1:8080/player; then
+        SERVER_READY=true
         break
     fi
     sleep 1
 done
+
+if [ "$SERVER_READY" = false ]; then
+    echo "⚠️ Le moteur de synchronisation (sync-engine.js) ne semble pas être lancé sur le port 8080."
+    echo "   Veuillez vous assurer que 'node sync-engine.js' est bien démarré dans un autre terminal."
+    echo "   Lancement de Chromium quand même..."
+fi
 
 # Récupération automatique du binaire Chromium packagé par l'OS
 CHROMIUM_BIN=$(command -v chromium-browser || command -v chromium)

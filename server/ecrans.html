@@ -390,7 +390,7 @@
                                 </select>` : ''}
                         </td>
                         <td style="font-size:11px;">${healthText}</td>
-                        <td>${p.wifiSSID || 'Ethernet'}<br><small>${p.ip || ''}</small></td>
+                        <td>${p.wifiSSID || 'Ethernet'}<br><small>${p.ip || ''}</small>${p.screenResolution ? `<br><small style="color:#3498db; font-weight:bold;">🖥️ ${p.screenResolution}</small>` : ''}</td>
                         <td>
                             <div style="display: flex; align-items: center; gap: 8px; min-width: 120px;">
                                 <input type="range" min="0" max="100" value="${p.volume !== undefined ? p.volume : 100}" 
@@ -496,6 +496,9 @@
                                 
                                 <span class="label">WiFi :</span>
                                 <span>${p.wifiSSID || 'Ethernet'} ${p.wifiSignal ? `(${p.wifiSignal}%)` : ''}</span>
+                                
+                                <span class="label">Résolution :</span>
+                                <span style="color:#3498db; font-weight:bold;">${p.screenResolution || 'Inconnue'}</span>
                                 
                                 ${healthCardHtml}
 

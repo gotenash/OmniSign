@@ -62,6 +62,7 @@ let DISABLE_CLIENT_LOGS = false;
 let DISABLE_DEBUG_LOGS = false;
 let SCREEN_WAKE_TIME = '07:00';
 let SCREEN_SLEEP_TIME = '22:00';
+let SCREEN_SLEEP_SCHEDULE = null;
 let SPLASH_SCREEN_URL = '/img/splashscreen.png';
 let SMTP_HOST = '';
 let SMTP_PORT = '587';
@@ -237,6 +238,7 @@ async function initializeDatabase() {
                 table.boolean('offlineAlertSent').defaultTo(false);
                 table.integer('volume').defaultTo(100);
                 table.text('latestScreenshot');
+                table.string('screenResolution');
             });
             console.log('Table "players" created.');
         }
@@ -280,6 +282,15 @@ async function initializeDatabase() {
                 table.string('lastHealthAlertSent');
             });
             console.log('Colonnes de télémétrie et santé ajoutées à la table "players".');
+        }
+
+        // Migration : Ajout de la colonne screenResolution si elle n'existe pas
+        const hasScreenResolution = await db.schema.hasColumn('players', 'screenResolution');
+        if (!hasScreenResolution) {
+            await db.schema.table('players', (table) => {
+                table.string('screenResolution');
+            });
+            console.log('Colonne "screenResolution" ajoutée à la table "players".');
         }
     });
 
@@ -424,6 +435,27 @@ async function initializeDatabase() {
         if (!sleepSetting) {
             await db('settings').insert({ key: 'screenSleepTime', value: '22:00' });
             console.log('Setting "screenSleepTime" ajouté.');
+        }
+        // Migration : s'assurer que screenSleepSchedule existe
+        const scheduleSetting = await db('settings').where({ key: 'screenSleepSchedule' }).first();
+        if (!scheduleSetting) {
+            const oldWake = await db('settings').where({ key: 'screenWakeTime' }).first();
+            const oldSleep = await db('settings').where({ key: 'screenSleepTime' }).first();
+            const wakeVal = oldWake ? oldWake.value : '07:00';
+            const sleepVal = oldSleep ? oldSleep.value : '22:00';
+
+            const initialSchedule = {
+                "1": { "enabled": true, "slots": [ { "wake": wakeVal, "sleep": sleepVal }, { "wake": "", "sleep": "" } ] },
+                "2": { "enabled": true, "slots": [ { "wake": wakeVal, "sleep": sleepVal }, { "wake": "", "sleep": "" } ] },
+                "3": { "enabled": true, "slots": [ { "wake": wakeVal, "sleep": sleepVal }, { "wake": "", "sleep": "" } ] },
+                "4": { "enabled": true, "slots": [ { "wake": wakeVal, "sleep": sleepVal }, { "wake": "", "sleep": "" } ] },
+                "5": { "enabled": true, "slots": [ { "wake": wakeVal, "sleep": sleepVal }, { "wake": "", "sleep": "" } ] },
+                "6": { "enabled": false, "slots": [ { "wake": wakeVal, "sleep": sleepVal }, { "wake": "", "sleep": "" } ] },
+                "7": { "enabled": false, "slots": [ { "wake": wakeVal, "sleep": sleepVal }, { "wake": "", "sleep": "" } ] }
+            };
+
+            await db('settings').insert({ key: 'screenSleepSchedule', value: JSON.stringify(initialSchedule) });
+            console.log('Setting "screenSleepSchedule" ajouté via migration des anciennes valeurs.');
         }
         // Migration : SMTP settings
         const smtpKeys = ['smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'notificationEmail'];
@@ -1125,6 +1157,7 @@ async function loadSettings() {
     const showOfflineAlertSetting = settings.find(s => s.key === 'showOfflineAlert');
     const periodicScreenshotEnabledSetting = settings.find(s => s.key === 'periodicScreenshotEnabled');
     const periodicScreenshotIntervalSetting = settings.find(s => s.key === 'periodicScreenshotInterval');
+    const scheduleSetting = settings.find(s => s.key === 'screenSleepSchedule');
 
     if (jwtSetting) JWT_SECRET = process.env.JWT_SECRET || jwtSetting.value;
     if (apiSetting) API_KEY = process.env.PIDYN_API_KEY || apiSetting.value;
@@ -1132,6 +1165,14 @@ async function loadSettings() {
     if (debugSetting) DISABLE_DEBUG_LOGS = debugSetting.value === 'true';
     if (wakeSetting) SCREEN_WAKE_TIME = wakeSetting.value;
     if (sleepSetting) SCREEN_SLEEP_TIME = sleepSetting.value;
+    if (scheduleSetting) {
+        try {
+            SCREEN_SLEEP_SCHEDULE = JSON.parse(scheduleSetting.value);
+        } catch (e) {
+            console.error("Erreur parsing screenSleepSchedule au démarrage:", e);
+            SCREEN_SLEEP_SCHEDULE = null;
+        }
+    }
     if (splashSetting) SPLASH_SCREEN_URL = splashSetting.value;
     if (smtpHostSetting) SMTP_HOST = smtpHostSetting.value;
     if (smtpPortSetting) SMTP_PORT = smtpPortSetting.value;
@@ -1197,11 +1238,50 @@ const checkSchedules = async (targetDeviceId = null, forceEmit = false) => {
 
     const schedules = await db('schedules').select('*');
 
-    // Calcul de l'état de l'écran (On/Off) basé sur l'heure actuelle
+    // Calcul de l'état de l'écran (On/Off) basé sur l'heure actuelle et le calendrier
+    const currentDayNum = now.getDay() === 0 ? 7 : now.getDay();
     const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-    const isAwakeTime = SCREEN_WAKE_TIME < SCREEN_SLEEP_TIME 
-        ? (currentTimeStr >= SCREEN_WAKE_TIME && currentTimeStr < SCREEN_SLEEP_TIME)
-        : (currentTimeStr >= SCREEN_WAKE_TIME || currentTimeStr < SCREEN_SLEEP_TIME);
+    
+    let isAwakeTime = false;
+    
+    if (SCREEN_SLEEP_SCHEDULE) {
+        try {
+            const sched = typeof SCREEN_SLEEP_SCHEDULE === 'string'
+                ? JSON.parse(SCREEN_SLEEP_SCHEDULE)
+                : SCREEN_SLEEP_SCHEDULE;
+            const daySched = sched[String(currentDayNum)];
+            if (daySched && daySched.enabled) {
+                if (daySched.slots && Array.isArray(daySched.slots)) {
+                    for (const slot of daySched.slots) {
+                        const wake = slot.wake;
+                        const sleep = slot.sleep;
+                        if (wake && sleep) {
+                            if (wake < sleep) {
+                                if (currentTimeStr >= wake && currentTimeStr < sleep) {
+                                    isAwakeTime = true;
+                                    break;
+                                }
+                            } else {
+                                if (currentTimeStr >= wake || currentTimeStr < sleep) {
+                                    isAwakeTime = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Erreur lors de l'évaluation de SCREEN_SLEEP_SCHEDULE:", e);
+            isAwakeTime = SCREEN_WAKE_TIME < SCREEN_SLEEP_TIME 
+                ? (currentTimeStr >= SCREEN_WAKE_TIME && currentTimeStr < SCREEN_SLEEP_TIME)
+                : (currentTimeStr >= SCREEN_WAKE_TIME || currentTimeStr < SCREEN_SLEEP_TIME);
+        }
+    } else {
+        isAwakeTime = SCREEN_WAKE_TIME < SCREEN_SLEEP_TIME 
+            ? (currentTimeStr >= SCREEN_WAKE_TIME && currentTimeStr < SCREEN_SLEEP_TIME)
+            : (currentTimeStr >= SCREEN_WAKE_TIME || currentTimeStr < SCREEN_SLEEP_TIME);
+    }
 
     for (const player of players) {
         if (player.status !== 'approved') continue; // Ne planifier que pour les afficheurs approuvés
@@ -1649,6 +1729,100 @@ app.get('/api/admin/analytics/hourly', authMiddleware, checkRole(['admin', 'edit
             res.json(hourlyData);
         })
         .catch(err => res.status(500).send(err.message));
+});
+
+app.get('/api/admin/analytics/daily-duration', authMiddleware, checkRole(['admin', 'editor']), (req, res) => {
+    const { groupId, deviceId } = req.query;
+    let query = db('analytics')
+        .join('players', 'analytics.deviceId', '=', 'players.id')
+        .select(db.raw("date(analytics.timestamp, 'localtime') as day"))
+        .sum('analytics.duration as durationMs')
+        .where('analytics.timestamp', '>', db.raw("datetime('now', '-7 days')"))
+        .groupBy('day')
+        .orderBy('day', 'asc');
+
+    if (groupId) {
+        query.where('players.group', groupId);
+    }
+    if (deviceId) {
+        query.where('analytics.deviceId', deviceId);
+    }
+
+    filterBySiteId(query, req.user, 'players.siteId')
+        .then(stats => {
+            const dailyData = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const dayStr = d.toISOString().split('T')[0];
+                const stat = stats.find(s => s.day === dayStr);
+                const ms = stat ? stat.durationMs : 0;
+                const hours = parseFloat((ms / 3600000).toFixed(2));
+                dailyData.push({ day: dayStr, hours });
+            }
+            res.json(dailyData);
+        })
+        .catch(err => res.status(500).send(err.message));
+});
+
+app.get('/api/admin/analytics/by-device', authMiddleware, checkRole(['admin', 'editor']), (req, res) => {
+    const { groupId } = req.query;
+    let query = db('analytics')
+        .join('players', 'analytics.deviceId', '=', 'players.id')
+        .select('players.name as playerName')
+        .count('analytics.id as count')
+        .groupBy('players.name')
+        .orderBy('count', 'desc');
+
+    if (groupId) {
+        query.where('players.group', groupId);
+    }
+
+    filterBySiteId(query, req.user, 'players.siteId')
+        .then(stats => res.json(stats))
+        .catch(err => res.status(500).send(err.message));
+});
+
+app.get('/api/admin/analytics/by-type', authMiddleware, checkRole(['admin', 'editor']), async (req, res) => {
+    const { groupId, deviceId } = req.query;
+    try {
+        let query = db('analytics')
+            .join('players', 'analytics.deviceId', '=', 'players.id')
+            .select('analytics.itemUrl')
+            .count('analytics.id as count');
+
+        if (groupId) {
+            query.where('players.group', groupId);
+        }
+        if (deviceId) {
+            query.where('analytics.deviceId', deviceId);
+        }
+
+        const stats = await filterBySiteId(query.groupBy('analytics.itemUrl'), req.user, 'players.siteId');
+
+        const counts = { image: 0, video: 0, template: 0, other: 0 };
+        stats.forEach(s => {
+            const url = (s.itemUrl || '').toLowerCase();
+            if (url.includes('/canteen') || url.includes('/meetings') || url.includes('/planning')) {
+                counts.template += s.count;
+            } else if (url.match(/\.(mp4|webm|ogg|mov)$/)) {
+                counts.video += s.count;
+            } else if (url.match(/\.(jpeg|jpg|png|gif|webp|svg)$/)) {
+                counts.image += s.count;
+            } else {
+                counts.other += s.count;
+            }
+        });
+
+        res.json([
+            { label: 'Images', value: counts.image },
+            { label: 'Vidéos', value: counts.video },
+            { label: 'Modèles', value: counts.template },
+            { label: 'Autres', value: counts.other }
+        ]);
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
 });
 
 app.delete('/api/admin/analytics', authMiddleware, checkRole(['admin']), (req, res) => {
@@ -2571,6 +2745,15 @@ app.post('/api/admin/settings', authMiddleware, checkRole(['admin']), async (req
         DISABLE_DEBUG_LOGS = !!settingsToUpdate.disableDebugLogs;
         SCREEN_WAKE_TIME = settingsToUpdate.screenWakeTime || '07:00';
         SCREEN_SLEEP_TIME = settingsToUpdate.screenSleepTime || '22:00';
+        if (settingsToUpdate.screenSleepSchedule) {
+            try {
+                SCREEN_SLEEP_SCHEDULE = typeof settingsToUpdate.screenSleepSchedule === 'string'
+                    ? JSON.parse(settingsToUpdate.screenSleepSchedule)
+                    : settingsToUpdate.screenSleepSchedule;
+            } catch (e) {
+                console.error("Erreur de parsing screenSleepSchedule dans POST settings:", e);
+            }
+        }
         SPLASH_SCREEN_URL = settingsToUpdate.splashScreenUrl || '/img/splashscreen.png';
         SMTP_HOST = settingsToUpdate.smtpHost || '';
         SMTP_PORT = settingsToUpdate.smtpPort || '587';
@@ -4321,6 +4504,7 @@ io.on('connection', async (socket) => {
             if (info.diskTotal !== undefined) updateData.diskTotal = info.diskTotal;
             if (info.diskFree !== undefined) updateData.diskFree = info.diskFree;
             if (info.cpuTemp !== undefined) updateData.cpuTemp = info.cpuTemp;
+            if (info.screenResolution !== undefined) updateData.screenResolution = info.screenResolution;
 
             // Mettre à jour le nom par défaut si le nom contient la valeur initiale générique "Nouveau Pi" / "Nouveau Client"
             if (player && (player.name.startsWith('Nouveau Pi') || player.name.startsWith('Nouveau Client') || player.name.startsWith('Nouveau PC')) && info.platform) {

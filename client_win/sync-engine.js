@@ -138,6 +138,12 @@ async function getNetworkInfo() {
         }
     } catch (e) {}
 
+    let screenResolution = null;
+    try {
+        const psRes = `powershell -command "[void][Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width.ToString() + 'x' + [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height.ToString()"`;
+        screenResolution = execSync(psRes).toString().trim();
+    } catch (e) {}
+
     return {
         ip: ips.length > 0 ? ips.join(' | ') : '127.0.0.1',
         mac: mac,
@@ -145,7 +151,8 @@ async function getNetworkInfo() {
         totalMem,
         freeMem,
         diskTotal,
-        diskFree
+        diskFree,
+        screenResolution
     };
 }
 

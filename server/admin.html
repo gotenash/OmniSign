@@ -29,6 +29,40 @@
             border: 2px solid #e67e22 !important;
             animation: orange-pulse 2s infinite ease-in-out;
         }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        @media(max-width: 600px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .chart-box {
+            background: #34495e;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .chart-box h3 {
+            margin: 0 0 12px 0;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #bdc3c7;
+            border-bottom: 1px dashed rgba(255,255,255,0.1);
+            padding-bottom: 8px;
+        }
+        .chart-canvas-container {
+            position: relative;
+            width: 100%;
+            height: 240px;
+        }
     </style>
     <link rel="stylesheet" href="/assets/theme.css">
     <script src="/assets/theme.js"></script>
@@ -129,8 +163,31 @@
                 <p id="site-display" style="font-size: 1.5em; color: #f1c40f; padding-top: 8px;">Global</p>
             </div>
         </div>
-        <div class="settings-box" style="padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-            <canvas id="analytics-chart" style="width: 100%; max-height: 250px;"></canvas>
+        <div class="charts-grid">
+            <div class="chart-box">
+                <h3>📈 Activité horaire (Dernières 24h)</h3>
+                <div class="chart-canvas-container">
+                    <canvas id="analytics-chart"></canvas>
+                </div>
+            </div>
+            <div class="chart-box">
+                <h3>📊 Temps de diffusion cumulé par jour (7j)</h3>
+                <div class="chart-canvas-container">
+                    <canvas id="analytics-daily-chart"></canvas>
+                </div>
+            </div>
+            <div class="chart-box">
+                <h3>🥧 Distribution de l'activité par écran</h3>
+                <div class="chart-canvas-container">
+                    <canvas id="analytics-device-chart"></canvas>
+                </div>
+            </div>
+            <div class="chart-box">
+                <h3>🍩 Type de média diffusé</h3>
+                <div class="chart-canvas-container">
+                    <canvas id="analytics-type-chart"></canvas>
+                </div>
+            </div>
         </div>
         <div id="analytics-list">
             <p>Chargement des statistiques...</p>
@@ -500,6 +557,10 @@
         }
 
         let analyticsChart = null;
+        let analyticsDailyChart = null;
+        let analyticsDeviceChart = null;
+        let analyticsTypeChart = null;
+
         async function loadAnalytics() {
             const headers = { 'Authorization': `Bearer ${token}` };
             const groupId = document.getElementById('analytics-group-filter') ? document.getElementById('analytics-group-filter').value : '';
@@ -533,10 +594,23 @@
             }
             document.getElementById('analytics-list').innerHTML = html + '</table>';
 
-            // Charger les données du graphique horaire
+            // 1. Graphique Horaire
             const resHourly = await fetch(`/api/admin/analytics/hourly${queryString}`, { headers });
             const hourlyData = await resHourly.json();
-            renderAnalyticsChart(hourlyData);
+            
+            // 2. Graphique Quotidien
+            const resDaily = await fetch(`/api/admin/analytics/daily-duration${queryString}`, { headers });
+            const dailyData = await resDaily.json();
+            
+            // 3. Graphique Écran
+            const resDevice = await fetch(`/api/admin/analytics/by-device${queryString}`, { headers });
+            const deviceData = await resDevice.json();
+
+            // 4. Graphique Type de média
+            const resType = await fetch(`/api/admin/analytics/by-type${queryString}`, { headers });
+            const typeData = await resType.json();
+
+            renderCharts(hourlyData, dailyData, deviceData, typeData);
         }
 
         function formatDuration(ms) {
@@ -550,21 +624,21 @@
             return `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
         }
 
-        function renderAnalyticsChart(data) {
-            const ctx = document.getElementById('analytics-chart').getContext('2d');
-            if (analyticsChart) analyticsChart.destroy();
-            
+        function renderCharts(hourly, daily, device, type) {
             const theme = localStorage.getItem('theme') || 'dark';
             const textColor = theme === 'light' ? '#2c3e50' : 'white';
             const gridColor = theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
 
-            analyticsChart = new Chart(ctx, {
+            // --- 1. Graphique Horaire ---
+            const ctxHourly = document.getElementById('analytics-chart').getContext('2d');
+            if (analyticsChart) analyticsChart.destroy();
+            analyticsChart = new Chart(ctxHourly, {
                 type: 'line',
                 data: {
-                    labels: data.map(d => d.hour),
+                    labels: hourly.map(d => d.hour),
                     datasets: [{
                         label: 'Nombre de diffusions (dernières 24h)',
-                        data: data.map(d => d.count),
+                        data: hourly.map(d => d.count),
                         borderColor: '#3498db',
                         backgroundColor: 'rgba(52, 152, 219, 0.2)',
                         borderWidth: 2,
@@ -574,6 +648,7 @@
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     scales: {
                         y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
                         x: { grid: { color: gridColor }, ticks: { color: textColor } }
@@ -581,22 +656,103 @@
                     plugins: { legend: { labels: { color: textColor } } }
                 }
             });
+
+            // --- 2. Graphique Quotidien (Temps cumulé) ---
+            const ctxDaily = document.getElementById('analytics-daily-chart').getContext('2d');
+            if (analyticsDailyChart) analyticsDailyChart.destroy();
+            analyticsDailyChart = new Chart(ctxDaily, {
+                type: 'bar',
+                data: {
+                    labels: daily.map(d => {
+                        const parts = d.day.split('-');
+                        return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d.day;
+                    }),
+                    datasets: [{
+                        label: 'Temps d\'affichage cumulé (heures)',
+                        data: daily.map(d => d.hours),
+                        backgroundColor: '#e67e22',
+                        borderColor: '#d35400',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+                        x: { grid: { color: gridColor }, ticks: { color: textColor } }
+                    },
+                    plugins: { legend: { labels: { color: textColor } } }
+                }
+            });
+
+            // --- 3. Graphique Répartition Écran (Camembert) ---
+            const ctxDevice = document.getElementById('analytics-device-chart').getContext('2d');
+            if (analyticsDeviceChart) analyticsDeviceChart.destroy();
+            
+            const deviceLabels = device.map(d => d.playerName || 'Inconnu');
+            const deviceCounts = device.map(d => d.count);
+            const palette = ['#2ecc71', '#9b59b6', '#f1c40f', '#e74c3c', '#1abc9c', '#34495e', '#d35400', '#7f8c8d'];
+            
+            analyticsDeviceChart = new Chart(ctxDevice, {
+                type: 'pie',
+                data: {
+                    labels: deviceLabels,
+                    datasets: [{
+                        data: deviceCounts,
+                        backgroundColor: deviceLabels.map((_, i) => palette[i % palette.length])
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { color: textColor } } }
+                }
+            });
+
+            // --- 4. Graphique Type de Média (Donut) ---
+            const ctxType = document.getElementById('analytics-type-chart').getContext('2d');
+            if (analyticsTypeChart) analyticsTypeChart.destroy();
+            
+            analyticsTypeChart = new Chart(ctxType, {
+                type: 'doughnut',
+                data: {
+                    labels: type.map(t => t.label),
+                    datasets: [{
+                        data: type.map(t => t.value),
+                        backgroundColor: ['#3498db', '#e74c3c', '#2ecc71', '#95a5a6']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { color: textColor } } }
+                }
+            });
         }
 
-        // Écouter le changement de thème en direct pour mettre à jour les couleurs du graphique
+        // Écouter le changement de thème en direct pour mettre à jour les couleurs des graphiques
         window.addEventListener('theme-changed', (e) => {
-            if (analyticsChart) {
-                const theme = e.detail.theme;
-                const textColor = theme === 'light' ? '#2c3e50' : 'white';
-                const gridColor = theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+            const theme = e.detail.theme;
+            const textColor = theme === 'light' ? '#2c3e50' : 'white';
+            const gridColor = theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
 
-                analyticsChart.options.scales.x.ticks.color = textColor;
-                analyticsChart.options.scales.x.grid.color = gridColor;
-                analyticsChart.options.scales.y.ticks.color = textColor;
-                analyticsChart.options.scales.y.grid.color = gridColor;
-                analyticsChart.options.plugins.legend.labels.color = textColor;
-                analyticsChart.update();
-            }
+            const charts = [analyticsChart, analyticsDailyChart, analyticsDeviceChart, analyticsTypeChart];
+            charts.forEach(chart => {
+                if (!chart) return;
+                if (chart.options.scales && chart.options.scales.x) {
+                    chart.options.scales.x.ticks.color = textColor;
+                    chart.options.scales.x.grid.color = gridColor;
+                }
+                if (chart.options.scales && chart.options.scales.y) {
+                    chart.options.scales.y.ticks.color = textColor;
+                    chart.options.scales.y.grid.color = gridColor;
+                }
+                if (chart.options.plugins && chart.options.plugins.legend) {
+                    chart.options.plugins.legend.labels.color = textColor;
+                }
+                chart.update();
+            });
         });
 
         async function resetAnalytics() {
