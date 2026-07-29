@@ -3,6 +3,43 @@
 <p align="center">
   <img src="img/logo_omnisign.png" alt="OmniSign Logo" width="300"/>
 </p>
+
+---
+
+## 🌍 Table of Contents / Sommaire
+
+<details open>
+<summary><b>🇬🇧 English Documentation</b> (Click to collapse/expand)</summary>
+
+*   [Overview](#english)
+*   [Features](#features)
+*   [Technologies Used](#technologies-used)
+*   [Getting Started](#getting-started)
+    *   [Step 0: Getting the Source Code](#0-getting-the-source-code)
+    *   [Step 1: Server Installation](#1-server-installation--configuration)
+    *   [Step 2: Client Player Installation](#2-client-player-installation)
+    *   [Step 3: Troubleshooting & Diagnostics](#3-troubleshooting--diagnostics)
+*   [Usage](#usage)
+*   [License](#license)
+</details>
+
+<details open>
+<summary><b>🇫🇷 Documentation en Français</b> (Click to collapse/expand)</summary>
+
+*   [Présentation](#français)
+*   [Fonctionnalités](#fonctionnalités)
+*   [Technologies Utilisées](#technologies-utilisées)
+*   [Guide d'Installation](#guide-dinstallation)
+    *   [Étape 0 : Récupérer les Sources](#0-récupérer-les-sources)
+    *   [Étape 1 : Installation & Configuration du Serveur](#1-installation--configuration-du-serveur)
+    *   [Étape 2 : Installation des Écrans (Clients)](#2-installation-des-écrans-clients)
+    *   [Étape 3 : Résolution des Problèmes & Diagnostics](#3-résolution-des-problèmes--diagnostics)
+*   [Utilisation](#utilisation)
+*   [Licence](#licence)
+</details>
+
+---
+
 ## English
 
 > [!WARNING]
