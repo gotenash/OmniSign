@@ -12,6 +12,8 @@
 <summary><b>🇬🇧 English Documentation</b> (Click to collapse/expand)</summary>
 
 *   [Overview](#english)
+*   [🗺️ System Architecture (Diagram)](archi.md)
+*   [Technical Architecture Details](architecture_omnisign.md)
 *   [Features](#features)
 *   [Technologies Used](#technologies-used)
 *   [Getting Started](#getting-started)
@@ -27,6 +29,8 @@
 <summary><b>🇫🇷 Documentation en Français</b> (Click to collapse/expand)</summary>
 
 *   [Présentation](#français)
+*   [🗺️ Schéma d'Architecture Système](archi.md)
+*   [Détails Techniques de l'Architecture](architecture_omnisign.md)
 *   [Fonctionnalités](#fonctionnalités)
 *   [Technologies Utilisées](#technologies-utilisées)
 *   [Guide d'Installation](#guide-dinstallation)
