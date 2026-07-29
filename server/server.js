@@ -182,6 +182,9 @@ async function initializeDatabase() {
                 table.string('email').unique();
             });
             console.log('Colonne "email" ajoutée à la table "users".');
+        } else {
+            // Nettoyage des anciennes valeurs vides pour éviter les conflits d'unicité SQLite
+            await db('users').where({ email: '' }).update({ email: null });
         }
     });
 
@@ -2258,7 +2261,8 @@ app.post('/api/admin/users', authMiddleware, checkRole(['admin']), async (req, r
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     db('users').where({ username }).first()
         .then(async (existingUser) => {
-            const userData = { password: hashedPassword, role, email, siteId: siteId || null };
+            const cleanEmail = (email && email.trim()) ? email.trim() : null;
+            const userData = { password: hashedPassword, role, email: cleanEmail, siteId: siteId || null };
             if (existingUser) {
                 await db('users').where({ username }).update(userData);
                 await logAction(req.user.username, req.user.role, req.user.siteId, 'user_update', `Modification de l'utilisateur "${username}" (Rôle : ${role})`, req);
