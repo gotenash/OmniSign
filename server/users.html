@@ -114,18 +114,23 @@
             });
             if (res.status === 403) window.location.href = '/';
             const users = await res.json();
+            const loggedInUser = localStorage.getItem('pidyn_username') || '';
 
             let html = '<table><tr><th>Utilisateur</th><th>Email</th><th>Rôle</th><th>Site</th><th>Actions</th></tr>';
             users.forEach(u => {
                 const siteName = u.siteId || '<em style="color:#bdc3c7">Global</em>';
+                const isSuperAdmin = (loggedInUser === 'admin');
+                const canEdit = isSuperAdmin || u.username !== 'admin';
+                const canDelete = u.username !== 'admin';
+                
                 html += `<tr>
                     <td>${u.username}</td>
                     <td>${u.email || '<em style="color:#bdc3c7">Non renseigné</em>'}</td>
                     <td>${u.role}</td>
                     <td>${siteName}</td>
                     <td> 
-                        <button class="secondary" title="Modifier" onclick="editUser('${u.username}', '${u.role}', '${u.email || ''}', '${u.siteId || ''}')">✏️</button>
-                        ${u.username !== 'admin' ? `<button class="danger" title="Supprimer" onclick="deleteUser('${u.username}')">🗑️</button>` : ''}
+                        ${canEdit ? `<button class="secondary" title="Modifier" onclick="editUser('${u.username}', '${u.role}', '${u.email || ''}', '${u.siteId || ''}')">✏️</button>` : ''}
+                        ${canDelete ? `<button class="danger" title="Supprimer" onclick="deleteUser('${u.username}')">🗑️</button>` : ''}
                     </td>
                 </tr>`;
             });
@@ -163,7 +168,8 @@
                 document.getElementById('user-site').value = '';
                 loadUsers();
             } else {
-                alert('Erreur lors de l\'enregistrement');
+                const errMsg = await res.text();
+                alert('Erreur : ' + (errMsg || "Erreur lors de l'enregistrement"));
             }
         }
 

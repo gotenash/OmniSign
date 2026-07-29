@@ -2252,6 +2252,9 @@ app.delete('/api/admin/schedules/:id', authMiddleware, checkRole(['admin', 'edit
 app.post('/api/admin/users', authMiddleware, checkRole(['admin']), async (req, res) => {
     const { username, password, role, email, siteId } = req.body;
     if (!username || !password || !role) return res.status(400).send('Données manquantes');
+    if (username === 'admin' && req.user.username !== 'admin') {
+        return res.status(403).send("Seul le compte super admin principal peut modifier les informations de l'utilisateur admin");
+    }
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     db('users').where({ username }).first()
         .then(async (existingUser) => {
