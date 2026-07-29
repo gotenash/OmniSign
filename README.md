@@ -76,6 +76,13 @@ OmniSign is a comprehensive digital signage solution designed to provide central
 
 ## Getting Started
 
+### 0. Getting the Source Code
+Clone the repository using Git:
+```bash
+git clone https://github.com/gotenash/OmniSign.git
+cd OmniSign
+```
+
 ### 1. Server Installation & Configuration
 
 #### Prerequisites
@@ -119,6 +126,11 @@ This builds a Node 20 container containing all system utilities (ffmpeg, yt-dlp,
 ### 2. Client Player Installation
 
 Before launching a client installer, ensure you have logged into the OmniSign admin panel, navigated to **Écrans (Screens)**, and copied your **Screen API Key**.
+
+> [!TIP]
+> **Using a Domain Name & Reverse Proxy (e.g., Nginx Proxy Manager)**:
+> If you host OmniSign behind a reverse proxy using a domain name (e.g., `https://omnisign.yourdomain.com`), make sure to **enable WebSocket support** in your proxy configuration (e.g., toggle "Websockets Support" in Nginx Proxy Manager). This is required for real-time player commands and status sync.
+
 
 #### A. Windows Client (`client_win/`)
 1. Go to the `client_win/` folder and double-click **`Installer_Client_Windows.bat`**.
@@ -249,6 +261,13 @@ OmniSign est une solution complète d'affichage dynamique conçue pour offrir un
 
 ## Guide d'Installation
 
+### 0. Récupérer les Sources
+Clonez le dépôt du projet avec Git :
+```bash
+git clone https://github.com/gotenash/OmniSign.git
+cd OmniSign
+```
+
 ### 1. Installation & Configuration du Serveur
 
 #### Prérequis
@@ -292,6 +311,11 @@ Cette commande construit un conteneur Node 20 contenant tous les outils nécessa
 ### 2. Installation des Écrans (Clients)
 
 Avant de lancer l'installateur d'un client, connectez-vous au panneau d'administration d'OmniSign, allez dans la section **Écrans**, et copiez la **Clé API de l'écran**.
+
+> [!TIP]
+> **Utilisation d'un nom de domaine & Reverse Proxy (ex: Nginx Proxy Manager)** :
+> Si vous hébergez OmniSign derrière un proxy inverse avec un nom de domaine (ex : `https://omnisign.votredomaine.fr`), assurez-vous d'**activer le support des WebSockets** dans la configuration de votre proxy (ex : cocher "Websockets Support" dans Nginx Proxy Manager). Cela est indispensable pour la synchronisation en temps réel et l'envoi de commandes aux écrans.
+
 
 #### A. Client Windows (`client_win/`)
 1. Rendez-vous dans le dossier `client_win/` et double-cliquez sur **`Installer_Client_Windows.bat`**.
