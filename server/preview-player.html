@@ -488,7 +488,83 @@
 
                     const mediaUrl = withPreviewAuth(zone.url);
 
-                    if (zone.type === 'image') {
+                    if ((zone.type === 'image' || zone.type === 'sozi') && mediaUrl.toLowerCase().split('?')[0].endsWith('.svg')) {
+                        // C'est un SVG. Vérifier s'il a des métadonnées Sozi d'accompagnement
+                        let meta = null;
+                        const mediaRecord = availableMedia.find(m => m.url === zone.url);
+                        if (mediaRecord && mediaRecord.metadata) {
+                            try {
+                                meta = typeof mediaRecord.metadata === 'string' ? JSON.parse(mediaRecord.metadata) : mediaRecord.metadata;
+                            } catch(e) {}
+                        }
+
+                        if (meta && meta.type === 'sozi' && meta.frames && meta.frames.length > 0) {
+                            // Charger le SVG de manière inline
+                            fetch(mediaUrl)
+                                .then(async (svgRes) => {
+                                    if (!svgRes.ok) throw new Error("Échec chargement SVG");
+                                    const svgText = await svgRes.text();
+                                    
+                                    zoneElement.innerHTML = '';
+                                    
+                                    const wrapper = document.createElement('div');
+                                    wrapper.style.width = '100%';
+                                    wrapper.style.height = '100%';
+                                    wrapper.style.position = 'relative';
+                                    wrapper.style.overflow = 'hidden';
+                                    
+                                    const svgWrapper = document.createElement('div');
+                                    svgWrapper.style.position = 'absolute';
+                                    svgWrapper.style.transformOrigin = '0 0';
+                                    svgWrapper.innerHTML = svgText;
+                                    
+                                    const svgEl = svgWrapper.querySelector('svg');
+                                    if (svgEl) {
+                                        if (!svgEl.getAttribute('viewBox')) {
+                                            const w = svgEl.getAttribute('width') || 800;
+                                            const h = svgEl.getAttribute('height') || 600;
+                                            svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+                                        }
+                                        svgEl.style.width = '1000px';
+                                        svgEl.style.height = 'auto';
+                                    }
+                                    
+                                    wrapper.appendChild(svgWrapper);
+                                    zoneElement.appendChild(wrapper);
+                                    
+                                    let currentFrameIdx = 0;
+                                    let animTimeout = null;
+                                    
+                                    function playSoziStep() {
+                                        if (!document.body.contains(svgWrapper)) {
+                                            clearTimeout(animTimeout);
+                                            return;
+                                        }
+                                        const frame = meta.frames[currentFrameIdx];
+                                        
+                                        const centerX = zoneElement.clientWidth / 2;
+                                        const centerY = zoneElement.clientHeight / 2;
+                                        
+                                        svgWrapper.style.transition = `transform ${frame.duration}s ${frame.easing}`;
+                                        svgWrapper.style.left = `${centerX}px`;
+                                        svgWrapper.style.top = `${centerY}px`;
+                                        svgWrapper.style.transform = `translate(${frame.x}px, ${frame.y}px) scale(${frame.zoom}) rotate(${frame.rotate}deg)`;
+                                        
+                                        animTimeout = setTimeout(() => {
+                                            currentFrameIdx = (currentFrameIdx + 1) % meta.frames.length;
+                                            playSoziStep();
+                                        }, (frame.duration + frame.delay) * 1000);
+                                    }
+                                    
+                                    setTimeout(playSoziStep, 100);
+                                })
+                                .catch((err) => {
+                                    zoneElement.innerHTML = `<img src="${mediaUrl}">`;
+                                });
+                        } else {
+                            zoneElement.innerHTML = `<img src="${mediaUrl}">`;
+                        }
+                    } else if (zone.type === 'image' || zone.type === 'sozi') {
                         zoneElement.innerHTML = `<img src="${mediaUrl}">`;
                     } else if (zone.type === 'video') {
                         const videoElement = document.createElement('video');
@@ -507,7 +583,7 @@
                                 videoElement.play().catch(e => console.log("Échec lecture vidéo:", e));
                             });
                         }, 30);
-                    } else if (zone.type === 'web') {
+                    } else if (zone.type === 'web' || zone.type === 'sozi_zip') {
                         const zoom = zone.webZoom || 1.0;
                         const panX = zone.webPanX || 0;
                         const panY = zone.webPanY || 0;

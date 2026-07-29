@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OmniSign - Éditeur d'Animation SVG (Sozi)</title>
+    <link rel="stylesheet" href="/assets/theme.css">
+    <script src="/assets/theme.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background: var(--bg-secondary);
+            border-bottom: 2px solid var(--accent-color);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header-title {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 8px 15px;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: var(--accent-hover);
+        }
+
+        button.secondary {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+        }
+
+        button.secondary:hover {
+            background: var(--border-color);
+        }
+
+        button.danger {
+            background: #e74c3c;
+        }
+
+        button.danger:hover {
+            background: #c0392b;
+        }
+
+        .workspace {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Panneau de gauche - Canvas */
+        .canvas-area {
+            flex-grow: 1;
+            background: #0f141c;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+        }
+
+        .canvas-area:active {
+            cursor: grabbing;
+        }
+
+        #svg-container {
+            position: absolute;
+            transform-origin: 0 0;
+            transition: none; /* Désactivé durant l'édition manuelle */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+        }
+
+        #svg-container svg {
+            display: block;
+            max-width: none;
+            max-height: none;
+        }
+
+        /* Filtre quadrillage pour le fond */
+        .checkerboard {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #0f141c;
+            background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 0);
+            background-size: 24px 24px;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Caméra viseur au centre */
+        .camera-crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0.3;
+        }
+
+        .camera-crosshair::before, .camera-crosshair::after {
+            content: '';
+            position: absolute;
+            background: white;
+        }
+
+        .camera-crosshair::before {
+            top: 9px; left: 0; width: 20px; height: 2px;
+        }
+
+        .camera-crosshair::after {
+            top: 0; left: 9px; width: 2px; height: 20px;
+        }
+
+        /* Panneau de droite - Contrôles */
+        .control-panel {
+            width: 380px;
+            min-width: 380px;
+            background: var(--bg-secondary);
+            border-left: 2px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        .section-panel {
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-panel h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1rem;
+            color: var(--accent-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .form-group input[type="text"], .form-group select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .form-group-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        /* Contrôles manuels de caméra */
+        .camera-sliders {
+            background: var(--bg-primary);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border: 1px solid var(--border-color);
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .slider-row label {
+            width: 50px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .slider-row input[type="range"] {
+            flex-grow: 1;
+            margin: 0;
+        }
+
+        .slider-row span {
+            width: 45px;
+            font-size: 11px;
+            text-align: right;
+            font-family: monospace;
+        }
+
+        /* Timeline des frames */
+        .timeline-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 2px;
+        }
+
+        .frame-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            cursor: pointer;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        .frame-card:hover {
+            border-color: var(--accent-color);
+        }
+
+        .frame-card.active {
+            border-color: var(--accent-color);
+            background: rgba(52, 152, 219, 0.1);
+        }
+
+        .frame-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .frame-meta {
+            font-size: 11px;
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .frame-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 5px;
+            margin-top: 4px;
+        }
+
+        .frame-actions button {
+            padding: 3px 6px;
+            font-size: 11px;
+        }
+
+        /* Notification Toast */
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2ecc71;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-weight: bold;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        /* Overlay d'aide */
+        #help-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center;
+        }
+        .help-content {
+            background: var(--bg-secondary); border: 2px solid var(--accent-color);
+            padding: 25px; border-radius: 8px; max-width: 500px;
+        }
+    </style>
+</head>
+<body>
+    <div id="toast">Enregistré !</div>
+
+    <!-- Aide popup -->
+    <div id="help-overlay" onclick="this.style.display='none'">
+        <div class="help-content" onclick="event.stopPropagation()">
+            <h3 style="margin-top:0;">📚 Guide d'utilisation</h3>
+            <p>Cet éditeur permet de créer des zooms et translations fluides au sein d'un fichier vectoriel SVG (façon Prezi/Sozi).</p>
+            <ul>
+                <li><strong>Déplacer la caméra</strong> : Cliquer et glisser (Drag) sur le canevas de gauche.</li>
+                <li><strong>Zoomer</strong> : Utiliser la molette de la souris au-dessus du canevas ou le curseur de zoom à droite.</li>
+                <li><strong>Tourner</strong> : Ajuster le curseur de rotation à droite.</li>
+                <li><strong>Créer une étape</strong> : Une fois le cadrage idéal trouvé, renseignez un titre à droite et cliquez sur <strong>➕ Enregistrer l'étape</strong>.</li>
+                <li><strong>Modifier/Visualiser</strong> : Cliquez sur une étape dans la timeline pour repositionner automatiquement la caméra sur celle-ci.</li>
+            </ul>
+            <button onclick="document.getElementById('help-overlay').style.display='none'" style="margin-top:15px; width:100%; justify-content:center;">Compris</button>
+        </div>
+    </div>
+
+    <header>
+        <div class="header-left">
+            <button class="secondary" onclick="goBack()">&larr; Retour</button>
+            <h1 class="header-title" id="editor-title">Éditeur d'Animation SVG (Sozi)</h1>
+        </div>
+        <div class="header-actions">
+            <button class="secondary" onclick="document.getElementById('help-overlay').style.display='flex'">❓ Aide</button>
+            <button class="secondary" id="btn-preview" onclick="togglePreview()">▶️ Lancer la prévisualisation</button>
+            <button class="danger" onclick="deleteAnimation()" style="display:none;" id="btn-delete-anim">🗑️ Supprimer l'animation</button>
+            <button onclick="saveAnimation()">💾 Sauvegarder l'animation</button>
+        </div>
+    </header>
+
+    <div class="workspace">
+        <div class="canvas-area" id="canvas-area" onmousedown="startDrag(event)" onwheel="handleWheel(event)">
+            <div class="checkerboard"></div>
+            <div class="camera-crosshair"></div>
+            <div id="svg-container"></div>
+        </div>
+
+        <div class="control-panel">
+            <div class="section-panel">
+                <h3>Position Caméra Actuelle</h3>
+                <div class="camera-sliders">
+                    <div class="slider-row">
+                        <label>Zoom</label>
+                        <input type="range" id="cam-zoom" min="0.1" max="15" step="0.05" value="1" oninput="updateCamSliders()">
+                        <span id="val-zoom">1.0x</span>
+                    </div>
+                    <div class="slider-row">
+                        <label>Rotation</label>
+                        <input type="range" id="cam-rotate" min="0" max="360" step="1" value="0" oninput="updateCamSliders()">
+                        <span id="val-rotate">0°</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; gap:5px; margin-top:10px;">
+                        <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="centerCam()">Centrer</button>
+                        <button class="secondary" style="padding:4px 8px; font-size:11px;" onclick="adjustToViewport()">Ajuster</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-panel">
+                <h3 id="form-frame-title">Créer / Éditer l'Étape</h3>
+                <div class="form-group">
+                    <label>Titre de l'étape</label>
+                    <input type="text" id="frame-name" placeholder="Ex: Entrées, Lundi, Vue globale...">
+                </div>
+                <div class="form-group-row">
+                    <div class="form-group">
+                        <label>Durée Trans. (s)</label>
+                        <select id="frame-duration">
+                            <option value="0">Immédiat (0s)</option>
+                            <option value="0.5">Rapide (0.5s)</option>
+                            <option value="1">Normal (1s)</option>
+                            <option value="1.5" selected>Doux (1.5s)</option>
+                            <option value="2.5">Lent (2.5s)</option>
+                            <option value="4">Très lent (4s)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Attente (s)</label>
+                        <select id="frame-delay">
+                            <option value="2">2 secondes</option>
+                            <option value="5" selected>5 secondes</option>
+                            <option value="8">8 secondes</option>
+                            <option value="12">12 secondes</option>
+                            <option value="20">20 secondes</option>
+                            <option value="30">30 secondes</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Profil de Transition (Easing)</label>
+                    <select id="frame-easing">
+                        <option value="ease-in-out" selected>Progressif (ease-in-out)</option>
+                        <option value="linear">Linéaire (linear)</option>
+                        <option value="ease-in">Accélération (ease-in)</option>
+                        <option value="ease-out">Décélération (ease-out)</option>
+                    </select>
+                </div>
+                <button style="width:100%; justify-content:center; margin-top:10px;" onclick="addOrUpdateFrame()">➕ Enregistrer l'étape</button>
+            </div>
+
+            <div class="section-panel" style="flex-grow:1; display:flex; flex-direction:column; border-bottom:none;">
+                <h3>Timeline des Étapes (<span id="frames-count">0</span>)</h3>
+                <div class="timeline-list" id="timeline-list">
+                    <!-- Les cartes d'étapes seront insérées ici -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('pidyn_token');
+        if (!token) {
+            window.location.href = '/login.html';
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const mediaId = urlParams.get('id');
+
+        if (!mediaId) {
+            alert("ID de média manquant !");
+            window.location.href = '/mediatheque';
+        }
+
+        let mediaData = null;
+        let frames = [];
+        let activeFrameIdx = null;
+
+        // Position caméra
+        let camX = 0;
+        let camY = 0;
+        let camZoom = 1;
+        let camRotate = 0;
+
+        // Dragging
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+
+        // Preview interval
+        let previewInterval = null;
+        let isPreviewing = false;
+        let previewIdx = 0;
+
+        async function init() {
+            try {
+                const res = await fetch(`/api/admin/media/${mediaId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error("Impossible de charger le média.");
+                mediaData = await res.json();
+
+                document.getElementById('editor-title').textContent = `Sozi - ${mediaData.filename}`;
+
+                // Charger le SVG
+                const svgRes = await fetch(mediaData.url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!svgRes.ok) throw new Error("Impossible de lire le fichier SVG.");
+                const svgText = await svgRes.text();
+                
+                const container = document.getElementById('svg-container');
+                container.innerHTML = svgText;
+
+                // Nettoyage et forçage de dimensions sur le premier SVG enfant trouvé
+                const svgElement = container.querySelector('svg');
+                if (svgElement) {
+                    // S'assurer qu'il a une viewBox
+                    if (!svgElement.getAttribute('viewBox')) {
+                        const w = svgElement.getAttribute('width') || 800;
+                        const h = svgElement.getAttribute('height') || 600;
+                        svgElement.setAttribute('viewBox', `0 0 ${w} ${h}`);
+                    }
+                    svgElement.style.width = '1000px'; // Taille fixe arbitraire pour simplifier le repère de zoom
+                    svgElement.style.height = 'auto';
+                }
+
+                // Charger les métadonnées existantes
+                if (mediaData.metadata) {
+                    try {
+                        const parsed = typeof mediaData.metadata === 'string' ? JSON.parse(mediaData.metadata) : mediaData.metadata;
+                        if (parsed && parsed.frames && parsed.frames.length > 0) {
+                            frames = parsed.frames;
+                            document.getElementById('btn-delete-anim').style.display = 'block';
+                        }
+                    } catch (e) {
+                        console.error("Erreur de parsing des métadonnées", e);
+                    }
+                }
+
+                centerCam();
+                renderTimeline();
+
+            } catch (err) {
+                alert(err.message);
+                window.location.href = '/mediatheque';
+            }
+        }
+
+        // Appliquer les coordonnées de caméra sur le container SVG
+        function applyTransform() {
+            const container = document.getElementById('svg-container');
+            // Calculer le décalage pour appliquer la transformation par rapport au centre de la zone de dessin
+            const area = document.getElementById('canvas-area');
+            const centerX = area.clientWidth / 2;
+            const centerY = area.clientHeight / 2;
+
+            container.style.left = `${centerX}px`;
+            container.style.top = `${centerY}px`;
+            container.style.transform = `translate(${camX}px, ${camY}px) scale(${camZoom}) rotate(${camRotate}deg)`;
+        }
+
+        function updateCamSliders() {
+            if (isPreviewing) stopPreview();
+            
+            camZoom = parseFloat(document.getElementById('cam-zoom').value);
+            camRotate = parseInt(document.getElementById('cam-rotate').value);
+            
+            document.getElementById('val-zoom').textContent = `${camZoom.toFixed(1)}x`;
+            document.getElementById('val-rotate').textContent = `${camRotate}°`;
+            applyTransform();
+        }
+
+        // Centrer la caméra
+        function centerCam() {
+            const svgElement = document.querySelector('#svg-container svg');
+            const svgW = svgElement ? svgElement.clientWidth : 1000;
+            const svgH = svgElement ? svgElement.clientHeight : 750;
+            
+            camZoom = 1;
+            camRotate = 0;
+            camX = - (svgW / 2) * camZoom;
+            camY = - (svgH / 2) * camZoom;
+            
+            document.getElementById('cam-zoom').value = camZoom;
+            document.getElementById('cam-rotate').value = camRotate;
+            updateCamSliders();
+        }
+
+        // Ajuster pour occuper tout le viewport
+        function adjustToViewport() {
+            const svgElement = document.querySelector('#svg-container svg');
+            if (!svgElement) return centerCam();
+            
+            const area = document.getElementById('canvas-area');
+            const ratioW = (area.clientWidth - 40) / svgElement.clientWidth;
+            const ratioH = (area.clientHeight - 40) / svgElement.clientHeight;
+            
+            camZoom = Math.min(ratioW, ratioH, 5);
+            camX = - (svgElement.clientWidth / 2) * camZoom;
+            camY = - (svgElement.clientHeight / 2) * camZoom;
+            camRotate = 0;
+            
+            document.getElementById('cam-zoom').value = camZoom;
+            document.getElementById('cam-rotate').value = camRotate;
+            updateCamSliders();
+        }
+
+        // Dragging
+        function startDrag(e) {
+            if (isPreviewing) stopPreview();
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            
+            // Attacher les listeners de mouvement au document
+            document.addEventListener('mousemove', handleDrag);
+            document.addEventListener('mouseup', endDrag);
+            e.preventDefault();
+        }
+
+        function handleDrag(e) {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            
+            camX += dx;
+            camY += dy;
+            
+            startX = e.clientX;
+            startY = e.clientY;
+            applyTransform();
+        }
+
+        function endDrag() {
+            isDragging = false;
+            document.removeEventListener('mousemove', handleDrag);
+            document.removeEventListener('mouseup', endDrag);
+        }
+
+        // Zoom à la molette
+        function handleWheel(e) {
+            if (isPreviewing) stopPreview();
+            e.preventDefault();
+            const factor = e.deltaY < 0 ? 1.1 : 0.9;
+            camZoom = Math.min(Math.max(camZoom * factor, 0.1), 20);
+            
+            document.getElementById('cam-zoom').value = camZoom;
+            updateCamSliders();
+        }
+
+        // Enregistrer une étape
+        function addOrUpdateFrame() {
+            if (isPreviewing) stopPreview();
+
+            const title = document.getElementById('frame-name').value.trim() || `Étape ${frames.length + 1}`;
+            const duration = parseFloat(document.getElementById('frame-duration').value);
+            const delay = parseInt(document.getElementById('frame-delay').value);
+            const easing = document.getElementById('frame-easing').value;
+
+            const frame = {
+                title,
+                x: Math.round(camX),
+                y: Math.round(camY),
+                zoom: parseFloat(camZoom.toFixed(2)),
+                rotate: camRotate,
+                duration,
+                delay,
+                easing
+            };
+
+            if (activeFrameIdx !== null) {
+                // Mettre à jour l'étape existante
+                frames[activeFrameIdx] = frame;
+                showToast("Étape mise à jour !");
+            } else {
+                // Ajouter une nouvelle étape
+                frames.push(frame);
+                showToast("Étape ajoutée !");
+            }
+
+            activeFrameIdx = null;
+            document.getElementById('frame-name').value = '';
+            document.getElementById('form-frame-title').textContent = "Créer l'Étape";
+            renderTimeline();
+        }
+
+        // Afficher la frise
+        function renderTimeline() {
+            document.getElementById('frames-count').textContent = frames.length;
+            const container = document.getElementById('timeline-list');
+            container.innerHTML = '';
+
+            frames.forEach((f, idx) => {
+                const card = document.createElement('div');
+                card.className = `frame-card ${activeFrameIdx === idx ? 'active' : ''}`;
+                card.onclick = () => selectFrame(idx);
+                card.innerHTML = `
+                    <div class="frame-header">
+                        <span>#${idx + 1} - ${f.title}</span>
+                        <span style="font-weight:normal; font-size:11px; color:var(--accent-color);">${f.delay}s (+${f.duration}s)</span>
+                    </div>
+                    <div class="frame-meta">
+                        <span>Coordonnées : X:${f.x} Y:${f.y}</span>
+                        <span>Zoom : ${f.zoom}x | Rot : ${f.rotate}°</span>
+                    </div>
+                    <div class="frame-actions">
+                        <button class="secondary" title="Monter" onclick="moveFrame(event, ${idx}, -1)">▲</button>
+                        <button class="secondary" title="Descendre" onclick="moveFrame(event, ${idx}, 1)">▼</button>
+                        <button class="danger" onclick="deleteFrame(event, ${idx})">🗑️</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Sélectionner une étape pour la charger dans la caméra
+        function selectFrame(idx) {
+            if (isPreviewing) stopPreview();
+
+            activeFrameIdx = idx;
+            const f = frames[idx];
+
+            document.getElementById('frame-name').value = f.title;
+            document.getElementById('frame-duration').value = f.duration;
+            document.getElementById('frame-delay').value = f.delay;
+            document.getElementById('frame-easing').value = f.easing;
+            document.getElementById('form-frame-title').textContent = `Éditer l'Étape #${idx + 1}`;
+
+            // Charger les coordonnées dans la caméra
+            camX = f.x;
+            camY = f.y;
+            camZoom = f.zoom;
+            camRotate = f.rotate;
+
+            document.getElementById('cam-zoom').value = camZoom;
+            document.getElementById('cam-rotate').value = camRotate;
+
+            document.getElementById('val-zoom').textContent = `${camZoom.toFixed(1)}x`;
+            document.getElementById('val-rotate').textContent = `${camRotate}°`;
+
+            renderTimeline();
+            
+            // Transition animée visuelle fluide pour le confort de l'édition
+            const container = document.getElementById('svg-container');
+            container.style.transition = `transform ${f.duration}s ${f.easing}`;
+            applyTransform();
+
+            // Retirer la transition après la fin pour que le drag reste instantané
+            setTimeout(() => {
+                if (activeFrameIdx === idx) {
+                    container.style.transition = 'none';
+                }
+            }, f.duration * 1000);
+        }
+
+        // Supprimer une étape
+        function deleteFrame(e, idx) {
+            e.stopPropagation();
+            if (confirm("Supprimer cette étape ?")) {
+                if (isPreviewing) stopPreview();
+                frames.splice(idx, 1);
+                if (activeFrameIdx === idx) {
+                    activeFrameIdx = null;
+                    document.getElementById('frame-name').value = '';
+                    document.getElementById('form-frame-title').textContent = "Créer l'Étape";
+                }
+                renderTimeline();
+            }
+        }
+
+        // Reordonner
+        function moveFrame(e, idx, dir) {
+            e.stopPropagation();
+            const targetIdx = idx + dir;
+            if (targetIdx < 0 || targetIdx >= frames.length) return;
+            
+            const temp = frames[idx];
+            frames[idx] = frames[targetIdx];
+            frames[targetIdx] = temp;
+
+            if (activeFrameIdx === idx) activeFrameIdx = targetIdx;
+            else if (activeFrameIdx === targetIdx) activeFrameIdx = idx;
+
+            renderTimeline();
+        }
+
+        // Lancer la prévisualisation cyclique
+        function togglePreview() {
+            if (isPreviewing) {
+                stopPreview();
+            } else {
+                if (frames.length === 0) {
+                    alert("Veuillez créer au moins une étape pour lancer la prévisualisation.");
+                    return;
+                }
+                startPreview();
+            }
+        }
+
+        function startPreview() {
+            isPreviewing = true;
+            document.getElementById('btn-preview').textContent = "⏹️ Arrêter l'aperçu";
+            document.getElementById('btn-preview').classList.add('danger');
+            previewIdx = 0;
+            playNextPreviewStep();
+        }
+
+        function playNextPreviewStep() {
+            if (!isPreviewing) return;
+
+            const f = frames[previewIdx];
+            
+            // Mettre en valeur la frame active
+            const cards = document.querySelectorAll('.frame-card');
+            cards.forEach((c, idx) => {
+                c.classList.toggle('active', idx === previewIdx);
+            });
+
+            // Appliquer la transformation
+            camX = f.x;
+            camY = f.y;
+            camZoom = f.zoom;
+            camRotate = f.rotate;
+
+            const container = document.getElementById('svg-container');
+            container.style.transition = `transform ${f.duration}s ${f.easing}`;
+            applyTransform();
+
+            // Préparer la transition suivante
+            previewInterval = setTimeout(() => {
+                previewIdx = (previewIdx + 1) % frames.length;
+                playNextPreviewStep();
+            }, (f.duration + f.delay) * 1000);
+        }
+
+        function stopPreview() {
+            isPreviewing = false;
+            clearTimeout(previewInterval);
+            document.getElementById('btn-preview').textContent = "▶️ Lancer la prévisualisation";
+            document.getElementById('btn-preview').classList.remove('danger');
+            document.getElementById('svg-container').style.transition = 'none';
+            renderTimeline();
+        }
+
+        // Sauvegarder
+        async function saveAnimation() {
+            if (isPreviewing) stopPreview();
+
+            try {
+                const res = await fetch(`/api/admin/media/${mediaId}/metadata`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        metadata: {
+                            type: 'sozi',
+                            frames
+                        }
+                    })
+                });
+
+                if (!res.ok) throw new Error("Erreur de sauvegarde.");
+                showToast("Animation enregistrée avec succès !");
+                if (frames.length > 0) {
+                    document.getElementById('btn-delete-anim').style.display = 'block';
+                }
+
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        // Supprimer
+        async function deleteAnimation() {
+            if (!confirm("Voulez-vous vraiment supprimer définitivement l'animation de ce SVG ?")) return;
+            if (isPreviewing) stopPreview();
+
+            try {
+                const res = await fetch(`/api/admin/media/${mediaId}/metadata`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        metadata: null
+                    })
+                });
+
+                if (!res.ok) throw new Error("Erreur de suppression.");
+                
+                frames = [];
+                activeFrameIdx = null;
+                document.getElementById('frame-name').value = '';
+                document.getElementById('form-frame-title').textContent = "Créer l'Étape";
+                document.getElementById('btn-delete-anim').style.display = 'none';
+                
+                centerCam();
+                renderTimeline();
+                showToast("Animation supprimée !");
+
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        function showToast(text) {
+            const toast = document.getElementById('toast');
+            toast.textContent = text;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+
+        function goBack() {
+            window.location.href = '/mediatheque';
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

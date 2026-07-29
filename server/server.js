@@ -350,6 +350,7 @@ async function initializeDatabase() {
                 table.string('parentZipDir');
                 table.string('parentFolderId');
                 table.string('parentFolderName');
+                table.text('metadata');
             });
             console.log('Table "media" created.');
         }
@@ -362,6 +363,15 @@ async function initializeDatabase() {
                 table.string('parentFolderName');
             });
             console.log('Colonnes "parentFolderId" et "parentFolderName" ajoutées à la table "media".');
+        }
+
+        // Migration : Ajout de la colonne metadata si absente
+        const hasMetadata = await db.schema.hasColumn('media', 'metadata');
+        if (!hasMetadata) {
+            await db.schema.table('media', (table) => {
+                table.text('metadata');
+            });
+            console.log('Colonne "metadata" ajoutée à la table "media".');
         }
     });
 
@@ -1532,6 +1542,14 @@ app.get('/mediatheque', (req, res) => {
     res.sendFile(path.join(__dirname, 'media.html'));
 });
 
+// Route pour l'éditeur d'animation Sozi (SVG)
+app.get('/sozi_editor', (req, res) => {
+    res.sendFile(path.join(__dirname, 'sozi_editor.html'));
+});
+app.get('/sozi_editor.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'sozi_editor.html'));
+});
+
 // Route pour la page de gestion des réunions et salles
 app.get('/meetings', (req, res) => {
     res.sendFile(path.join(__dirname, 'meetings.html'));
@@ -1664,6 +1682,25 @@ app.get('/api/admin/media', authMiddleware, checkRole(['admin', 'editor', 'autho
     filterBySiteId(db('media').select('*'), req.user)
         .then(media => res.json(media))
         .catch(err => res.status(500).send('Error fetching media'));
+});
+
+// API Admin : Récupérer les détails d'un média (y compris les métadonnées Sozi)
+app.get('/api/admin/media/:id', authMiddleware, checkRole(['admin', 'editor', 'author']), (req, res) => {
+    db('media').where({ id: req.params.id }).first()
+        .then(media => {
+            if (!media) return res.status(404).send('Média non trouvé');
+            res.json(media);
+        })
+        .catch(err => res.status(500).send('Erreur lors de la récupération du média'));
+});
+
+// API Admin : Enregistrer les métadonnées d'animation (Sozi) d'un média
+app.post('/api/admin/media/:id/metadata', authMiddleware, checkRole(['admin', 'editor', 'author']), (req, res) => {
+    const { metadata } = req.body;
+    const dbValue = (metadata === null || metadata === undefined) ? null : (typeof metadata === 'string' ? metadata : JSON.stringify(metadata));
+    db('media').where({ id: req.params.id }).update({ metadata: dbValue })
+        .then(() => res.json({ success: true }))
+        .catch(err => res.status(500).send('Erreur lors de la sauvegarde des métadonnées'));
 });
 
 // API Player : Enregistrement des logs de diffusion
@@ -3061,6 +3098,24 @@ app.post('/api/admin/canteen', authMiddleware, checkRole(['admin', 'editor', 'au
     } catch (err) {
         console.error("Erreur POST /api/admin/canteen:", err);
         res.status(500).send("Erreur lors de la sauvegarde du menu de la cantine : " + err.message);
+    }
+});
+
+// GET /api/player/media/metadata - Endpoint public/player pour récupérer les métadonnées Sozi d'un SVG
+app.get('/api/player/media/metadata', async (req, res) => {
+    try {
+        const { filename, url } = req.query;
+        let query = db('media');
+        if (filename) query = query.where({ filename });
+        else if (url) query = query.where({ url });
+        else return res.status(400).send('Filename or URL required');
+        
+        const media = await query.first();
+        if (!media) return res.status(404).send('Média non trouvé');
+        res.json({ metadata: media.metadata });
+    } catch (err) {
+        console.error("Erreur GET /api/player/media/metadata:", err);
+        res.status(500).send("Erreur serveur");
     }
 });
 

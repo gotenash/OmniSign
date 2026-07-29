@@ -187,6 +187,38 @@ function resolveMediaUrl(url) {
     return `${baseUrl}${separator}apiKey=${encodeURIComponent(API_KEY)}`;
 }
 
+async function downloadSvgMetadata(url, localFilename) {
+    if (!url || !url.toLowerCase().endsWith('.svg')) return;
+    try {
+        const fullUrl = resolveMediaUrl(`/api/player/media/metadata?url=${encodeURIComponent(url)}`);
+        const res = await axios.get(fullUrl, { timeout: 3000 });
+        if (res.data && res.data.metadata) {
+            const metaPath = path.join(LOCAL_MEDIA_DIR, localFilename + '.json');
+            const parsedMeta = typeof res.data.metadata === 'string' ? JSON.parse(res.data.metadata) : res.data.metadata;
+            await fs.writeJson(metaPath, parsedMeta, { spaces: 2 });
+            console.log(`  💾 Métadonnées d'animation synchronisées pour ${localFilename}`);
+        }
+    } catch (e) {
+        // Pas d'animation ou erreur silencieuse
+    }
+}
+
+async function downloadSvgMetadata(url, localFilename) {
+    if (!url || !url.toLowerCase().endsWith('.svg')) return;
+    try {
+        const fullUrl = resolveMediaUrl(`/api/player/media/metadata?url=${encodeURIComponent(url)}`);
+        const res = await axios.get(fullUrl, { timeout: 3000 });
+        if (res.data && res.data.metadata) {
+            const metaPath = path.join(LOCAL_MEDIA_DIR, localFilename + '.json');
+            const parsedMeta = typeof res.data.metadata === 'string' ? JSON.parse(res.data.metadata) : res.data.metadata;
+            await fs.writeJson(metaPath, parsedMeta, { spaces: 2 });
+            console.log(`  💾 Métadonnées d'animation synchronisées pour ${localFilename}`);
+        }
+    } catch (e) {
+        // Pas d'animation ou erreur silencieuse
+    }
+}
+
 async function downloadFile(url, destPath) {
     const fullUrl = resolveMediaUrl(url);
     console.log(`📥 Téléchargement : ${getLocalFilename(url)}`);
@@ -281,9 +313,16 @@ async function syncPlaylist(playlistData) {
         if (!exists) {
             try {
                 await downloadFile(item.url, localPath);
+                if (item.filename.toLowerCase().endsWith('.svg')) {
+                    await downloadSvgMetadata(item.url, item.filename);
+                }
             } catch (err) {
                 console.error(`❌ Échec du téléchargement pour ${item.filename}:`, err.message);
                 socket.emit('player-status-update', { downloading: false, error: err.message });
+            }
+        } else {
+            if (item.filename.toLowerCase().endsWith('.svg')) {
+                await downloadSvgMetadata(item.url, item.filename);
             }
         }
         completedDownloads++;

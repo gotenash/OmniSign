@@ -411,15 +411,24 @@
             
             // 1. Parcourir les lecteurs pour voir s'ils diffusent un diaporama ou une séquence
             Object.values(globalPlayers).forEach(p => {
-                if (!p.playlistId) return;
+                // Playlist directe (manuelle ou active en direct)
+                if (p.manualPlaylistId) usedPlaylistIds.add(p.manualPlaylistId);
+                if (p.currentPlaylistId) usedPlaylistIds.add(p.currentPlaylistId);
                 
-                // Si l'écran diffuse directement ce diaporama
-                usedPlaylistIds.add(p.playlistId);
+                // Séquence manuelle directe
+                if (p.manualSequenceId) {
+                    const seq = globalSequences[p.manualSequenceId];
+                    if (seq && seq.playlistIds) {
+                        seq.playlistIds.forEach(id => usedPlaylistIds.add(id));
+                    }
+                }
                 
-                // Si l'écran diffuse une séquence, récupérer les diaporamas de cette séquence
-                const seq = globalSequences[p.playlistId];
-                if (seq && seq.playlistIds) {
-                    seq.playlistIds.forEach(id => usedPlaylistIds.add(id));
+                // Séquence active en direct
+                if (p.currentSequenceId) {
+                    const seq = globalSequences[p.currentSequenceId];
+                    if (seq && seq.playlistIds) {
+                        seq.playlistIds.forEach(id => usedPlaylistIds.add(id));
+                    }
                 }
             });
 

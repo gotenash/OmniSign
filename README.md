@@ -41,6 +41,8 @@ OmniSign is a comprehensive digital signage solution designed to provide central
 *   **Template Style Customizer (`/templates`):** Interactive visualization dashboard for editing Canteen and Meeting layers styles. Customize background configurations, and edit the HTML structure directly using a rich WYSIWYG visual editor featuring advanced inline text sizing (bypassing browser minimum font size limits via a virtual 1920x1080 canvas scaled with CSS), inline color pickers, custom library fonts, and a categorized emoji selector, with changes updated live inside a high-fidelity 16:9 preview canvas.
 *   **Slideshow Sequences Management (`/diaporamas`):** Combine multiple slideshows (playlists) in a looping sequence. Change play orders using simple vertical ordering controls and plan them directly within the planning dashboard.
 *   **Playlist Management:** Create, edit, and delete dynamic playlists composed of various media types. Includes an advanced management panel with filters (search by name/author, filter by validation status, resolution, and live usage detection to show which playlists are active on screens or sequences vs orphaned).
+*   **Integrated Native SVG Animator (Sozi):** Interactive visual creator (`sozi_editor.html`) allowing step-by-step definition of zoom, pan, and rotation frames directly inside OmniSign on plain SVG files. Animations are rendered natively with hardware-accelerated CSS 3D transitions.
+*   **Three Distinct Layer Types:** Content isolation into `sozi` (native vector animations), `sozi_zip` (legacy extracted ZIP presentations played in an iframe), and `web` (regular web pages or custom URLs) with smart filter parameters and automatic duration synchronization matching the animation length.
 *   **Media Management:** Upload and organize media files (images, videos, custom fonts) with grid/list view toggles, custom search filter, and sorting.
 *   **Player Management:** Register, approve, and assign specific playlists to individual Raspberry Pi display units. Monitor their status (last seen).
 *   **Content Scheduling:** Implement time-based scheduling to automatically switch playlists on players at predefined times.
@@ -73,78 +75,93 @@ OmniSign is a comprehensive digital signage solution designed to provide central
 *   **Database:** SQLite for robust data persistence
 
 ## Getting Started
-### Easy Server Installation (Windows & Linux)
 
-#### Windows
-Double-click **`Installer_OmniSign.bat`** at the root of the repository.
-The guided wizard will:
-1. Check for **Node.js** and automatically install or upgrade it to the latest LTS version using `winget`.
-2. Install all required `npm` dependencies.
-3. Create an **"OmniSign Serveur"** shortcut on your Desktop.
-4. Prompt to launch the server immediately and open your web browser at `http://localhost:3000`.
+### 1. Server Installation & Configuration
 
-To start the server manually at any time, double-click `Lancer_OmniSign.bat` or the Desktop shortcut.
+#### Prerequisites
+- **Node.js**: v18.x or v20.x (LTS recommended)
+- **Optional (for PowerPoint Import)**: LibreOffice and Poppler-Utils (provides `pdftocairo`).
+- **Optional (for YouTube Import)**: `yt-dlp` and `ffmpeg` (the setup scripts will attempt to install these automatically).
 
-#### Linux
-Run **`setup_server.sh`** at the root of the repository:
+#### A. Windows Server
+Double-click the **`Installer_OmniSign.bat`** file at the root of the repository.
+The interactive guided wizard will:
+1. Detect or install/upgrade **Node.js** via `winget`.
+2. Install all backend `npm` dependencies.
+3. Create a shortcut **"OmniSign Serveur"** on your Desktop.
+4. Auto-launch the server and open your default browser at `http://localhost:3000`.
+
+*To start the server manually at any time, use the Desktop shortcut or double-click `Lancer_OmniSign.bat`.*
+
+#### B. Linux Server (Ubuntu / Debian / Raspberry Pi OS)
+Run the script **`setup_server.sh`** at the root of the repository:
 ```bash
 chmod +x setup_server.sh
 ./setup_server.sh
 ```
-The guided script will:
-1. Install system dependencies (`nodejs`, `npm`, `ffmpeg`, `poppler-utils`, `libreoffice`, `yt-dlp`).
-2. Install all required Node.js dependencies in the `server` directory.
-3. Create an **"OmniSign Serveur"** shortcut on your Desktop.
-4. Prompt to launch the server immediately.
+The script will guide you to:
+1. Update packages and install system dependencies (`nodejs`, `npm`, `ffmpeg`, `poppler-utils`, `libreoffice`, `yt-dlp`).
+2. Install all Node.js libraries in the `server` directory.
+3. Create a **Desktop shortcut** to launch the server.
+4. Prompt you to register a **systemd service** (`omnisign-server.service`) to run the CMS as a background daemon automatically starting at boot.
 
-To start the server manually at any time, run `./Lancer_OmniSign.sh` or double-click the Desktop shortcut.
+*To start the server manually, run `./Lancer_OmniSign.sh`.*
 
-#### Docker
-Run the server using Docker and Docker Compose:
+#### C. Docker Deployment
+If you prefer containerized deployment, run:
 ```bash
 docker compose up -d --build
 ```
-The Docker setup:
-1. Builds a lightweight Node 20 environment.
-2. Installs all required system dependencies (LibreOffice, Poppler, FFmpeg, latest yt-dlp).
-3. Persists media uploads and the SQLite database inside a dedicated Docker volume named `omnisign-data`.
+This builds a Node 20 container containing all system utilities (ffmpeg, yt-dlp, LibreOffice) and persists the media assets and the SQLite database inside a Docker volume named `omnisign-data`.
 
-Access the admin panel at `http://localhost:3000`.
+---
 
+### 2. Client Player Installation
 
-### Guided Client Installers (Windows, Raspberry Pi, Linux Desktop)
+Before launching a client installer, ensure you have logged into the OmniSign admin panel, navigated to **Écrans (Screens)**, and copied your **Screen API Key**.
 
-All 3 client platforms feature an interactive installation wizard that prompts for:
-- **Server Address**: Local network IP (e.g., `192.168.1.50:3000`) or Remote Domain URL (e.g., `http://omnisign.local:3000`).
-- **Screen API Key**: Generated from the OmniSign server admin panel.
-- **Device ID**: Unique identifier for the display unit.
+#### A. Windows Client (`client_win/`)
+1. Go to the `client_win/` folder and double-click **`Installer_Client_Windows.bat`**.
+2. Enter the **Server URL** (e.g., `http://192.168.1.50:3000`).
+3. Enter your **Screen API Key** and a unique **Device ID** (e.g., `lobby-screen-01`).
+4. The script creates `setup.txt`, installs Node.js packages, and adds `omnisign-start.bat` to your Windows startup group (`shell:startup`) so it runs automatically in full screen when Windows starts.
 
-#### 1. Windows Client (`client_win/`)
-Run **`Installer_Client_Windows.bat`** inside `client_win/`.
-- Interactively configures server URL, API key, and Device ID.
-- Automatically generates `setup.txt` and `omnisign-start.bat`.
-- Installs Node.js dependencies and optionally registers the player in Windows Startup (`shell:startup`).
+#### B. Raspberry Pi Client (`client_pi/`)
+*Compatible with Raspberry Pi OS Bookworm or newer (Desktop variant).*
+1. Navigate to the client directory and run the installer:
+   ```bash
+   cd client_pi
+   bash installer_pi.sh
+   ```
+2. The interactive script will ask for the Server URL, API Key, and Device ID, writing them to `/boot/firmware/setup.txt`.
+3. It installs `nodejs`, `npm`, `chromium-browser`, and `unclutter` (to hide the mouse cursor).
+4. It sets up an Openbox autostart script to boot the browser directly in kiosk full-screen mode on startup.
+5. It registers the synchronization engine as a system daemon:
+   - Check status: `sudo systemctl status omnisign-client.service`
+   - Read logs: `journalctl -u omnisign-client.service -f`
 
-#### 2. Raspberry Pi Client (`client_pi/`)
-Run **`installer_pi.sh`** inside `client_pi/`:
-```bash
-cd client_pi
-bash installer_pi.sh
-```
-- Interactive CLI wizard writes setup variables to `/boot/setup.txt` (or `/boot/firmware/setup.txt`).
-- Automated system setup (Node.js, Chromium, X11, Openbox, Kiosk autostart, systemd service).
+#### C. Linux Desktop Client (`client_linux/`)
+*Tested on Linux Mint, Ubuntu, and Zorin OS.*
+1. Navigate to the client directory and run the installer:
+   ```bash
+   cd client_linux
+   bash installer_linux.sh
+   ```
+2. Enter your setup details when prompted (saved to `setup.txt`).
+3. The installer configures local browser autostart files in `~/.config/autostart/` to boot the player on graphical login.
 
-#### 3. Linux Desktop Client (`client_linux/`)
-Run **`installer_linux.sh`** inside `client_linux/`:
-```bash
-cd client_linux
-bash installer_linux.sh
-```
-- Interactive CLI wizard configures `setup.txt`, installs dependencies, and registers autostart entries inside `~/.config/autostart/`.
+---
+
+### 3. Troubleshooting & Diagnostics
+
+- **Black Screen / Captured Screenshots are Black**: On some Linux variants using hardware-accelerated drivers, screenshots may display black. The client handles automatic fallback between `gnome-screenshot`, `scrot`, and `grim` (Wayland). Make sure the player session is logged in graphically.
+- **Sync Issues**:
+  - Verify that the player can reach the server: `curl http://YOUR_SERVER_IP:3000/api/status`
+  - Check the client process logs. For Pi / Linux, run `journalctl --user -u omnisign-sync -n 100` or check the local `logs/` folder inside the client directory.
 
 ## Usage
 1.  **Access Admin Panel:** Open a web browser and navigate to `http://your-server-ip:3000`.
-2.  **Login:** Use the default credentials (e.g., `admin`/`123456`) to log in. **It is highly recommended to change default passwords immediately.**
+2.  **Login:** Use the default credentials (`admin`/`password`) to log in. **It is highly recommended to change default passwords immediately.**
 3.  **Upload Media:** Go to the media section to upload your images and videos.
 4.  **Create Playlists:** Design playlists by adding your uploaded media, setting durations, and other properties.
 5.  **Manage Players:** Approve new Raspberry Pi clients that connect. Assign playlists to them manually or create schedules.
@@ -196,6 +213,8 @@ OmniSign est une solution complète d'affichage dynamique conçue pour offrir un
 *   **Personnalisation Visuelle des Modèles (`/templates`) :** Interface interactive de modification des styles pour les couches Cantine et Réunions. Ajustez la couleur et l'image d'arrière-plan, et éditez directement la structure HTML via un éditeur visuel (WYSIWYG) complet (dimensionnement de texte s'affranchissant des limites de tailles minimales des navigateurs grâce à un canevas virtuel 1920x1080 mis à l'échelle, palettes de couleurs, intégration de polices personnalisées de la médiathèque, et catalogue d'émojis). Le rendu est projeté instantanément dans un mockup d'aperçu dynamique 16:9 haute fidélité.
 *   **Gestion des Séquences de Diaporamas (`/diaporamas`) :** Associez et enchaînez en boucle plusieurs diaporamas. Organisez l'ordre de défilement à l'aide de flèches de tri et planifiez la séquence directement dans la grille de planification.
 *   **Gestion des Playlists :** Créez, modifiez et supprimez des playlists dynamiques. Comprend un panneau de gestion enrichi de filtres (recherche par nom ou auteur, filtrage par statut de validation, résolution, et détection automatique d'utilisation en direct indiquant si la playlist tourne sur un écran/séquence ou est orpheline).
+*   **Éditeur d'Animations SVG Natif (Sozi) :** Éditeur visuel interactif (`sozi_editor.html`) permettant de définir des étapes de zoom, de translation (pan) et de rotation directement sur les fichiers SVG de la médiathèque. Les animations sont exécutées nativement par les players via des transitions CSS 3D accélérées matériellement.
+*   **Séparation en 3 Types de Calques :** Isolation stricte des types de calques en `sozi` (animations SVG natives), `sozi_zip` (anciens diaporamas ZIP extraits joués sous IFrame), et `web` (pages web ou adresses externes) avec filtres automatiques et ajustement automatique de la durée du calque selon le cumul des étapes de l'animation.
 *   **Gestion des Médias :** Téléchargez et organisez les fichiers multimédias (images, vidéos, polices personnalisées) avec commutateurs d'affichage grille/liste, filtre de recherche personnalisé et tri.
 *   **Gestion des Lecteurs (Players) :** Enregistrez, approuvez et attribuez des playlists spécifiques à des unités d'affichage Raspberry Pi individuelles. Surveillez leur statut (dernière connexion).
 *   **Planification de Contenu :** Mettez en œuvre une planification basée sur le temps pour changer automatiquement les playlists sur les lecteurs à des heures prédéfinies.
@@ -228,79 +247,94 @@ OmniSign est une solution complète d'affichage dynamique conçue pour offrir un
 *   **Client (Raspberry Pi):** Node.js, Client Socket.IO, axios, Chromium, X11, LightDM, Openbox, Systemd, Bash
 *   **Base de Données:** SQLite pour une persistance robuste des données
 
-## Démarrage Rapide
-### Installation Simplifiée du Serveur (Windows & Linux)
+## Guide d'Installation
 
-#### Windows
-Double-cliquez sur **`Installer_OmniSign.bat`** à la racine du projet.
+### 1. Installation & Configuration du Serveur
+
+#### Prérequis
+- **Node.js** : v18.x ou v20.x (LTS recommandée)
+- **Optionnel (pour l'import PowerPoint)** : LibreOffice et Poppler-Utils (fournit `pdftocairo`).
+- **Optionnel (pour l'import YouTube)** : `yt-dlp` et `ffmpeg` (les scripts d'installation tentent de les installer automatiquement).
+
+#### A. Serveur Windows
+Double-cliquez sur le fichier **`Installer_OmniSign.bat`** à la racine du dépôt.
 L'assistant guidé va :
-1. Vérifier la présence de **Node.js** et l'installer ou le mettre à jour vers la dernière version LTS via `winget`.
-2. Installer automatiquement toutes les dépendances `npm`.
+1. Détecter la présence de **Node.js** ou l'installer/mettre à jour via `winget`.
+2. Installer toutes les dépendances `npm` du serveur.
 3. Créer un raccourci **« OmniSign Serveur »** sur votre Bureau.
-4. Démarrer le serveur et ouvrir votre navigateur à l'adresse `http://localhost:3000`.
+4. Lancer le serveur et ouvrir votre navigateur par défaut à l'adresse `http://localhost:3000`.
 
-Pour relancer le serveur ultérieurement, double-cliquez sur `Lancer_OmniSign.bat` ou sur le raccourci du Bureau.
+*Pour démarrer le serveur manuellement par la suite, utilisez le raccourci du Bureau ou double-cliquez sur `Lancer_OmniSign.bat`.*
 
-#### Linux
-Exécutez **`setup_server.sh`** à la racine du projet :
+#### B. Serveur Linux (Ubuntu / Debian / Raspberry Pi OS)
+Exécutez le script **`setup_server.sh`** à la racine du dépôt :
 ```bash
 chmod +x setup_server.sh
 ./setup_server.sh
 ```
 L'assistant guidé va :
-1. Installer les dépendances système (`nodejs`, `npm`, `ffmpeg`, `poppler-utils`, `libreoffice`, `yt-dlp`).
-2. Installer automatiquement toutes les dépendances `npm` dans le dossier `server/`.
-3. Créer un raccourci **« OmniSign Serveur »** sur votre Bureau.
-4. Proposer de démarrer le serveur immédiatement.
+1. Mettre à jour vos dépôts et installer les paquets système (`nodejs`, `npm`, `ffmpeg`, `poppler-utils`, `libreoffice`, `yt-dlp`).
+2. Installer toutes les dépendances Node.js dans le dossier `server/`.
+3. Créer un raccourci de lancement sur votre **Bureau**.
+4. Vous proposer d'enregistrer un **service systemd** (`omnisign-server.service`) afin que le serveur s'exécute en tâche de fond et démarre automatiquement lors du boot de la machine.
 
-Pour relancer le serveur ultérieurement, exécutez `./Lancer_OmniSign.sh` ou double-cliquez sur le raccourci du Bureau.
+*Pour démarrer le serveur manuellement par la suite, lancez `./Lancer_OmniSign.sh`.*
 
-#### Docker
-Exécutez le serveur en utilisant Docker et Docker Compose :
+#### C. Déploiement Docker
+Si vous préférez un déploiement conteneurisé, exécutez :
 ```bash
 docker compose up -d --build
 ```
-La configuration Docker :
-1. Construit un environnement Node 20 léger.
-2. Installe toutes les dépendances système requises (LibreOffice, Poppler, FFmpeg, dernière version de yt-dlp).
-3. Persiste la médiathèque et la base de données SQLite dans un volume Docker nommé `omnisign-data`.
+Cette commande construit un conteneur Node 20 contenant tous les outils nécessaires (LibreOffice, yt-dlp, FFmpeg) et persiste la médiathèque et la base SQLite dans un volume Docker nommé `omnisign-data`.
 
-Accédez au panneau d'administration à l'adresse `http://localhost:3000`.
+---
 
+### 2. Installation des Écrans (Clients)
 
-### Installateurs Guidés pour les Clients (Windows, Raspberry Pi, Linux Desktop)
+Avant de lancer l'installateur d'un client, connectez-vous au panneau d'administration d'OmniSign, allez dans la section **Écrans**, et copiez la **Clé API de l'écran**.
 
-Les 3 types de clients proposent un assistant interactif qui vous demande :
-- **L'adresse du serveur** : IP locale (ex: `192.168.1.50:3000`) ou Nom de domaine (ex: `http://omnisign.local:3000`).
-- **La clé API de l'écran** : Générée depuis le panneau d'administration du serveur.
-- **L'identifiant de l'écran (Device ID)** : Nom unique de l'afficheur.
+#### A. Client Windows (`client_win/`)
+1. Rendez-vous dans le dossier `client_win/` et double-cliquez sur **`Installer_Client_Windows.bat`**.
+2. Renseignez l'**URL du serveur** (ex: `http://192.168.1.50:3000`).
+3. Saisissez votre **Clé API** et un **Device ID** unique pour cet écran (ex: `ecran-accueil-01`).
+4. Le script va générer `setup.txt`, installer les dépendances et ajouter le script `omnisign-start.bat` au dossier de démarrage de Windows (`shell:startup`) pour lancer automatiquement le lecteur en plein écran au démarrage de la session.
 
-#### 1. Client Windows (`client_win/`)
-Exécutez **`Installer_Client_Windows.bat`** dans le dossier `client_win/`.
-- Configure interactivement l'IP/domaine du serveur, la clé API et l'ID de l'écran.
-- Génère automatiquement `setup.txt` et `omnisign-start.bat`.
-- Installe les dépendances et ajoute l'application au démarrage de Windows (`shell:startup`).
+#### B. Client Raspberry Pi (`client_pi/`)
+*Compatible avec Raspberry Pi OS Bookworm ou supérieur (version Desktop).*
+1. Ouvrez un terminal dans le dossier du client Pi :
+   ```bash
+   cd client_pi
+   bash installer_pi.sh
+   ```
+2. L'assistant vous demandera l'URL du serveur, la clé API et l'identifiant de l'écran, puis les écrira dans `/boot/firmware/setup.txt`.
+3. Il installera `nodejs`, `npm`, `chromium-browser`, et `unclutter` (pour masquer la souris).
+4. Il configurera Openbox et le démarrage automatique de session pour lancer Chromium directement en mode Kiosque plein écran au boot.
+5. Il configurera le moteur de synchronisation en tâche de fond (service systemd) :
+   - Vérifier le statut : `sudo systemctl status omnisign-client.service`
+   - Lire les logs en direct : `journalctl -u omnisign-client.service -f`
 
-#### 2. Client Raspberry Pi (`client_pi/`)
-Exécutez **`installer_pi.sh`** dans le dossier `client_pi/` :
-```bash
-cd client_pi
-bash installer_pi.sh
-```
-- Assistant guidé inscrivant la configuration dans `/boot/setup.txt` (ou `/boot/firmware/setup.txt`).
-- Installation système automatique (Node.js, Chromium, X11, Openbox, Kiosk autostart, service systemd).
+#### C. Client Linux Desktop (`client_linux/`)
+*Testé sur Linux Mint, Ubuntu et Zorin OS.*
+1. Ouvrez un terminal dans le dossier du client Linux :
+   ```bash
+   cd client_linux
+   bash installer_linux.sh
+   ```
+2. Renseignez les paramètres demandés par l'assistant (sauvegardés dans `setup.txt`).
+3. Le script configurera le démarrage automatique du lecteur au sein de la session graphique locale via le répertoire standard `~/.config/autostart/`.
 
-#### 3. Client Linux Desktop (`client_linux/`)
-Exécutez **`installer_linux.sh`** dans le dossier `client_linux/` :
-```bash
-cd client_linux
-bash installer_linux.sh
-```
-- Assistant guidé configurant `setup.txt`, installant les dépendances et inscrivant l'application dans le démarrage de session (`~/.config/autostart/`).
+---
+
+### 3. Résolution des Problèmes & Diagnostics
+
+- **Écran noir ou capture d'écran noire** : Sur certaines distributions Linux utilisant des pilotes graphiques avec accélération matérielle, la capture d'écran peut renvoyer du noir. Le client intègre un mécanisme de secours qui alterne automatiquement entre `gnome-screenshot`, `scrot` et `grim` (Wayland). Assurez-vous également que la session de l'afficheur est bien ouverte graphiquement.
+- **Problème de synchronisation** :
+  - Vérifiez que le client accède au serveur : `curl http://IP_VOTRE_SERVEUR:3000/api/status`
+  - Consultez les logs du moteur de synchronisation. Sur Pi/Linux, exécutez `journalctl --user -u omnisign-sync -n 100` ou examinez le dossier local `logs/` situé dans le répertoire du client.
 
 ## Utilisation
 1.  **Accéder au Panneau d'Administration:** Ouvrez un navigateur web et accédez à `http://votre-ip-serveur:3000`.
-2.  **Connexion:** Utilisez les identifiants par défaut (par exemple, `admin`/`123456`) pour vous connecter. **Il est fortement recommandé de changer les mots de passe par défaut immédiatement.**
+2.  **Connexion:** Utilisez les identifiants par défaut (`admin`/`password`) pour vous connecter. **Il est fortement recommandé de changer les mots de passe par défaut immédiatement.**
 3.  **Télécharger des Médias:** Accédez à la section des médias pour télécharger vos images et vidéos.
 4.  **Créer des Playlists:** Concevez des playlists en ajoutant vos médias téléchargés, en définissant les durées et d'autres propriétés.
 5.  **Gérer les Lecteurs:** Approuvez les nouveaux clients Raspberry Pi qui se connectent. Attribuez-leur des playlists manuellement ou créez des planifications.

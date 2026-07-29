@@ -37,6 +37,8 @@
         .media-item .delete-btn:hover { background: #c0392b; }
         .media-item .preview-btn { position: absolute; top: 8px; right: 36px; background: #3498db; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; transition: background 0.2s; z-index: 10; }
         .media-item .preview-btn:hover { background: #2980b9; }
+        .media-item .sozi-btn { position: absolute; top: 8px; right: 64px; background: #2ecc71; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; transition: background 0.2s; z-index: 10; }
+        .media-item .sozi-btn:hover { background: #27ae60; }
  
         /* Mode Liste */
         .media-grid.list-view { display: flex; flex-direction: column; gap: 8px; }
@@ -52,6 +54,8 @@
         .media-grid.list-view .media-meta { flex-direction: row; gap: 0; }
         .media-grid.list-view .meta-separator { display: inline; color: #7f8c8d; }
         .media-grid.list-view .delete-btn { position: static; margin-left: 5px; }
+        .media-grid.list-view .sozi-btn { position: static; margin-left: auto; margin-right: 8px; }
+        .media-grid.list-view .sozi-btn + .preview-btn { margin-left: 0; }
         .media-grid.list-view .preview-btn { position: static; margin-left: auto; }
         .media-grid.list-view .media-select-checkbox { position: static; margin-right: 15px; margin-top: 0; }
  
@@ -638,6 +642,9 @@
                 const canDeleteMedia = (role === 'admin' || role === 'editor' || item.uploadedBy === username);
                 const checkboxHtml = canDeleteMedia ? `<input type="checkbox" class="media-select-checkbox" data-id="${item.id}" ${isSelected ? 'checked' : ''} onclick="handleCheckboxClick(event, '${item.id}', ${idx})">` : '';
 
+                const isSvg = item.type === 'svg' || (item.filename || '').toLowerCase().endsWith('.svg');
+                const soziBtnHtml = isSvg ? `<button class="sozi-btn" onclick="event.stopPropagation(); window.location.href='/sozi_editor.html?id=${item.id}'" title="Animer le SVG (Sozi)">🎬</button>` : '';
+
                 div.innerHTML = `
                     ${checkboxHtml}
                     <div class="media-content">
@@ -651,6 +658,7 @@
                             </div>
                         </div>
                     </div>
+                    ${soziBtnHtml}
                     <button class="preview-btn" onclick="event.stopPropagation(); showLightbox('${item.id}')" title="Visionner en grand">👁️</button>
                     ${canDeleteMedia ? `<button class="delete-btn" onclick="event.stopPropagation(); deleteMedia('${item.id}')">×</button>` : ''}
                 `;

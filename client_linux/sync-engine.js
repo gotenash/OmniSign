@@ -251,6 +251,26 @@ async function syncPlaylist(playlistData) {
     const uniqueUrls = [...new Set(allUrls.filter(u => !!u))];
     let processedCount = 0;
 
+    const downloadSvgMetadata = async (url, relativePath) => {
+        if (!url || !url.toLowerCase().endsWith('.svg')) return;
+        try {
+            const cleanUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `/api/player/media/metadata?url=${encodeURIComponent(url)}`;
+            const finalUrl = cleanUrl.startsWith('http') ? cleanUrl : `${SERVER_URL}${cleanUrl.startsWith('/') ? '' : '/'}${cleanUrl}`;
+            const separator = finalUrl.includes('?') ? '&' : '?';
+            const requestUrl = finalUrl.includes('apiKey=') ? finalUrl : `${finalUrl}${separator}apiKey=${encodeURIComponent(API_KEY)}`;
+            
+            const res = await axios.get(requestUrl, { timeout: 3000, httpsAgent: httpsAgent });
+            if (res.data && res.data.metadata) {
+                const metaPath = path.join(LOCAL_MEDIA_DIR, relativePath + '.json');
+                const parsedMeta = typeof res.data.metadata === 'string' ? JSON.parse(res.data.metadata) : res.data.metadata;
+                await fs.writeJson(metaPath, parsedMeta, { spaces: 2 });
+                console.log(`  💾 Métadonnées d'animation synchronisées pour ${relativePath}`);
+            }
+        } catch (e) {
+            // Pas d'animation ou erreur silencieuse
+        }
+    };
+
     // Fonction utilitaire pour télécharger un média
     const downloadMedia = async (url) => {
         if (!url) return null;
@@ -303,6 +323,9 @@ async function syncPlaylist(playlistData) {
                     writer.on('error', reject);
                 });
                 await fs.chmod(localPath, 0o644);
+                if (relativePath.toLowerCase().endsWith('.svg')) {
+                    await downloadSvgMetadata(url, relativePath);
+                }
             } catch (error) {
                 console.error(`❌ Échec du téléchargement de ${relativePath}:`, error.message);
                 try {
@@ -312,6 +335,10 @@ async function syncPlaylist(playlistData) {
                 } catch (e) {}
                 return url; // Retourne l'URL distante en cas d'échec pour tenter une lecture directe
             } 
+        } else {
+            if (relativePath.toLowerCase().endsWith('.svg')) {
+                await downloadSvgMetadata(url, relativePath);
+            }
         }
         processedCount++;
         socket.emit('player-status-update', { 
