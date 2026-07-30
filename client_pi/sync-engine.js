@@ -95,6 +95,15 @@ const DEVICE_ID = localConfig.DEVICE_ID || (process.env.PIDYN_DEVICE_ID && proce
 
 const LOCAL_MEDIA_DIR = path.join(__dirname, 'media');
 const LOCAL_MANIFEST = path.join(__dirname, 'playlist.json');
+const APP_DIR = __dirname;
+
+function resolveMediaUrl(url) {
+    if (!url) return '';
+    const baseUrl = (url.startsWith('http://') || url.startsWith('https://')) ? url : `${SERVER_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    if (baseUrl.includes('apiKey=')) return baseUrl;
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${separator}apiKey=${encodeURIComponent(API_KEY)}`;
+}
 
 let activeAlerts = []; // Stockage local des alertes actives
 
@@ -595,7 +604,7 @@ socket.on('screen-command', (data) => {
         console.log("🛑 Extinction de l'écran (DPMS, Wayland, GNOME & CEC)...");
         
         // A. Fermer Chromium et unclutter pour libérer la veille
-        exec('pkill -f chromium; pkill -f unclutter', () => {
+        exec('pkill -f start_player.sh; pkill -f chromium; pkill -f unclutter', () => {
             // B. X11 DPMS
             exec(`${envPrefix} && xset +dpms && xset dpms force off`, (error) => {
                 if (!error) console.log("📺 Veille DPMS X11 forcée.");
@@ -672,7 +681,7 @@ socket.on('screen-command', (data) => {
         // E. Nettoyer et relancer le player en arrière-plan (avec X11 & Wayland env)
         setTimeout(() => {
             console.log("📺 Nettoyage et lancement du player Chromium...");
-            exec('pkill -f chromium; pkill -f unclutter', () => {
+            exec('pkill -f start_player.sh; pkill -f chromium; pkill -f unclutter', () => {
                 exec(`${runEnv} && /home/pi/pidyn/start_player.sh &`, (launchErr) => {
                     if (launchErr) {
                         console.error(`❌ Erreur lors du lancement du player : ${launchErr.message}`);
@@ -805,6 +814,7 @@ const mimeTypes = {
 };
 
 const localServer = http.createServer(async (req, res) => {
+    console.log(`🌐 [HTTP Request] ${req.method} ${req.url}`);
     // Nettoyer l'URL et décoder les URI (espaces, accents)
     let safeUrl = req.url.split('?')[0];
     try {
@@ -822,6 +832,7 @@ const localServer = http.createServer(async (req, res) => {
     try {
         const exists = await fs.pathExists(filePath);
         if (!exists) {
+            console.warn(`⚠️ [HTTP 404] Fichier non trouvé : ${filePath}`);
             res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
             return res.end('Fichier non trouvé');
         }
@@ -876,6 +887,7 @@ const localServer = http.createServer(async (req, res) => {
             fileStream.pipe(res);
         }
     } catch (err) {
+        console.error(`❌ Erreur serveur local lors du traitement de ${filePath} :`, err.stack || err.message || err);
         res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end(`Erreur serveur : ${err.message}`);
     }

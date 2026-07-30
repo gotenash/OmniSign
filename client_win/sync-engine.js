@@ -86,6 +86,7 @@ const DEVICE_ID = (process.env.PIDYN_DEVICE_ID && process.env.PIDYN_DEVICE_ID !=
 
 const LOCAL_MEDIA_DIR = path.join(__dirname, 'media');
 const LOCAL_MANIFEST = path.join(__dirname, 'playlist.json');
+const APP_DIR = __dirname;
 
 console.log(`--- Démarrage OmniSign Sync Windows (Node ${process.version}) ---`);
 console.log(`📡 Serveur cible : ${SERVER_URL}`);

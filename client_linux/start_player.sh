@@ -23,6 +23,14 @@ export GNOME_KEYRING_PID=1
 export SECRET_VAULT_PASSWORD=none
 
 
+# Temporisation au démarrage si le système vient de booter
+UPTIME=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 999)
+if [ "$UPTIME" -lt 60 ]; then
+    echo "⌛ Système démarré depuis ${UPTIME}s. Pause de 12s pour laisser l'affichage s'initialiser..."
+    sleep 12
+fi
+
+
 # Tuer swayidle ou tout processus de mise en veille automatique Wayland
 pkill -f swayidle 2>/dev/null
 
@@ -90,8 +98,18 @@ if [ -z "$CHROMIUM_BIN" ]; then
     exit 1
 fi
 
-# Lancement de Chrome/Chromium en mode Kiosk épuré et performant
+# Détection et configuration pour Wayland (particulièrement sous Ubuntu/Debian moderne)
+EXTRA_FLAGS=""
+if [ -n "$WAYLAND_DISPLAY" ] || [ "$XDG_SESSION_TYPE" = "wayland" ]; then
+    # --disable-gpu est recommandé si l'écran reste blanc ou si l'accélération matérielle est inactive
+    EXTRA_FLAGS="--ozone-platform=wayland --enable-features=UseOzonePlatform --use-gl=egl --disable-gpu"
+else
+    EXTRA_FLAGS="--disable-gpu"
+fi
+
+# Lancement de Chrome/Chromium en mode Kiosk épuré et performant avec journalisation vers chromium.log
 $CHROMIUM_BIN \
+  $EXTRA_FLAGS \
   --kiosk \
   --autoplay-policy=no-user-gesture-required \
   --password-store=basic \
@@ -104,4 +122,5 @@ $CHROMIUM_BIN \
   --disable-restart-bubble \
   --disable-dev-shm-usage \
   --js-flags='--max-old-space-size=512' \
-  'http://127.0.0.1:8080/player'
+  --enable-logging=stderr --v=1 \
+  'http://127.0.0.1:8080/player' > "$HOME/pidyn/chromium.log" 2>&1
