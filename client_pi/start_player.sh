@@ -110,4 +110,4 @@ $CHROMIUM_BIN \
   --disable-dev-shm-usage \
   --js-flags='--max-old-space-size=512' \
   --enable-logging=stderr --v=1 \
-  'http://127.0.0.1:8080/player' > /home/pi/pidyn/chromium.log 2>&1
+  'http://127.0.0.1:8080/player' > /home/pi/omnisign/chromium.log 2>&1

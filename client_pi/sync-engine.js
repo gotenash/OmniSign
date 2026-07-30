@@ -682,7 +682,7 @@ socket.on('screen-command', (data) => {
         setTimeout(() => {
             console.log("📺 Nettoyage et lancement du player Chromium...");
             exec('pkill -f start_player.sh; pkill -f chromium; pkill -f unclutter', () => {
-                exec(`${runEnv} && /home/pi/pidyn/start_player.sh &`, (launchErr) => {
+                exec(`${runEnv} && /home/pi/omnisign/start_player.sh &`, (launchErr) => {
                     if (launchErr) {
                         console.error(`❌ Erreur lors du lancement du player : ${launchErr.message}`);
                     } else {
@@ -770,7 +770,7 @@ socket.on('clear-local-cache', async () => {
 // Écouter les commandes de redémarrage du service
 socket.on('restart-service', () => {
     console.log(`🔄 Commande de redémarrage du service reçue.`);
-    exec('sudo systemctl restart pidyn-sync.service', (error, stdout, stderr) => {
+    exec('sudo systemctl restart omnisign-sync.service', (error, stdout, stderr) => {
         if (error) console.error(`❌ Erreur d'exécution : ${error.message}`);
     });
 });

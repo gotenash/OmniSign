@@ -8,10 +8,10 @@ BOOT_DIR="/boot"
 SETUP_FILE="$BOOT_DIR/setup.txt"
 
 # Dossier d'installation de l'application PiDyn
-INSTALL_DIR="/home/pi/pidyn"
+INSTALL_DIR="/home/pi/omnisign"
 
 # Fichier de log pour le setup
-LOG_FILE="/var/log/pidyn_setup.log"
+LOG_FILE="/var/log/omnisign_setup.log"
 
 # --- Fonctions utilitaires ---
 log_message() {
@@ -93,8 +93,8 @@ fi
 
 # 3. Installation de polices
 if [ -d "$BOOT_DIR/fonts" ]; then
-    sudo mkdir -p /usr/local/share/fonts/pidyn
-    sudo cp "$BOOT_DIR/fonts"/*.{ttf,otf} /usr/local/share/fonts/pidyn/ 2>/dev/null
+    sudo mkdir -p /usr/local/share/fonts/omnisign
+    sudo cp "$BOOT_DIR/fonts"/*.{ttf,otf} /usr/local/share/fonts/omnisign/ 2>/dev/null
     sudo fc-cache -f -v
 fi
 
@@ -115,7 +115,7 @@ sudo -u pi npm install socket.io-client axios fs-extra || error_exit "Échec de 
 
 # 6. Configurer le service systemd pour sync-engine.js
 log_message "Configuration du service systemd pour sync-engine.js..."
-cat <<EOF | sudo tee /etc/systemd/system/pidyn-sync.service > /dev/null
+cat <<EOF | sudo tee /etc/systemd/system/omnisign-sync.service > /dev/null
 [Unit]
 Description=OmniSign Sync Engine
 After=network.target
@@ -134,8 +134,8 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable pidyn-sync.service
-sudo systemctl restart pidyn-sync.service
+sudo systemctl enable omnisign-sync.service
+sudo systemctl restart omnisign-sync.service
 
 # 7. Configurer le démarrage automatique via le script start_player
 log_message "Configuration du démarrage automatique du joueur via start_player.sh..."
@@ -143,15 +143,15 @@ log_message "Configuration du démarrage automatique du joueur via start_player.
 # Création du dossier d'autostart si inexistant
 mkdir -p /home/pi/.config/autostart
 
-cat <<EOF > /home/pi/.config/autostart/pidyn.desktop
+cat <<EOF > /home/pi/.config/autostart/omnisign.desktop
 [Desktop Entry]
 Type=Application
 Name=OmniSign Player
-Exec=/home/pi/pidyn/start_player.sh
+Exec=/home/pi/omnisign/start_player.sh
 EOF
 
-chown pi:pi /home/pi/.config/autostart/pidyn.desktop
-chmod +x /home/pi/.config/autostart/pidyn.desktop
+chown pi:pi /home/pi/.config/autostart/omnisign.desktop
+chmod +x /home/pi/.config/autostart/omnisign.desktop
 # 8. Nettoyage et finalisation
 log_message "Configuration forcée de LightDM pour l'auto-login..."
 sudo groupadd -r autologin 2>/dev/null
@@ -186,13 +186,13 @@ chown -R pi:pi /home/pi/.config/openbox
 sudo systemctl set-default graphical.target
 sudo raspi-config nonint do_boot_behaviour B4 || log_message "Avertissement : Impossible de configurer l'autologin via raspi-config."
 
-# Sécurité supplémentaire : Conversion LF des scripts et forçage des droits sur le dossier PiDyn
+# Sécurité supplémentaire : Conversion LF des scripts et forçage des droits sur le dossier OmniSign
 find "$INSTALL_DIR" -name "*.sh" -exec sed -i 's/\r$//' {} +
 sudo chown -R pi:pi "$INSTALL_DIR"
 sudo chmod -R 755 "$INSTALL_DIR"
 
 # Nettoyage de toute ancienne planification de veille (DPMS)
-TMP_CRON="/tmp/pidyn_cron"
+TMP_CRON="/tmp/omnisign_cron"
 sudo -u pi crontab -l 2>/dev/null | grep -v "xset dpms" > "$TMP_CRON" || echo "" > "$TMP_CRON"
 sudo -u pi crontab "$TMP_CRON" && rm "$TMP_CRON"
 sync
