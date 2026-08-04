@@ -16,6 +16,7 @@ services:
       - PORT=3000
       - DATABASE_PATH=/usr/src/app/data/pidyn.sqlite
       - MEDIA_DIR=/usr/src/app/data/media
+      - TZ=Europe/Paris
 
 volumes:
   omnisign-data:

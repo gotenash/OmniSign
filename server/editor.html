@@ -854,6 +854,44 @@
             renderTimeline();
         }
 
+        async function fetchSoziZipDuration(zone, item, forceUpdate = false) {
+            try {
+                const res = await fetch(zone.url + PREVIEW_AUTH);
+                if (res.ok) {
+                    const html = await res.text();
+                    const match = html.match(/var\s+soziPresentationData\s*=\s*({[\s\S]*?});/);
+                    if (match) {
+                        const presentationData = JSON.parse(match[1]);
+                        if (presentationData && presentationData.frames) {
+                            let totalDurationMs = 0;
+                            presentationData.frames.forEach(f => {
+                                totalDurationMs += (parseInt(f.transitionDurationMs) || 0) + (f.timeoutEnable ? (parseInt(f.timeoutMs) || 0) : 0);
+                            });
+                            if (totalDurationMs > 0) {
+                                const shouldUpdate = forceUpdate || !zone.duration || zone.duration === 5000;
+                                if (shouldUpdate && zone.duration !== totalDurationMs) {
+                                    zone.duration = totalDurationMs;
+                                    if (item && zone.start + zone.duration > item.duration) {
+                                        item.duration = zone.start + zone.duration;
+                                        if (playlistData.items[selectedIndex] === item) {
+                                            document.getElementById('page-duration').value = item.duration;
+                                        }
+                                    }
+                                    if (selectedZoneIndex !== -1 && playlistData.items[selectedIndex].zones[selectedZoneIndex] === zone) {
+                                        document.getElementById('z-duration').value = zone.duration;
+                                    }
+                                    renderTimeline();
+                                    renderPreview();
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch(e) {
+                console.error("Erreur lors de la lecture de la durée Sozi ZIP:", e);
+            }
+        }
+
         function syncSoziZonesDurations() {
             if (!playlistData || !playlistData.items) return;
             let modified = false;
@@ -870,13 +908,18 @@
                                         meta.frames.forEach(f => {
                                             totalDurationMs += ((parseFloat(f.duration) || 0) + (parseFloat(f.delay) || 0)) * 1000;
                                         });
-                                        if (totalDurationMs > 0 && zone.duration !== totalDurationMs) {
+                                        if (totalDurationMs > 0 && (zone.duration === 5000 || !zone.duration) && zone.duration !== totalDurationMs) {
                                             zone.duration = totalDurationMs;
+                                            if (zone.start + zone.duration > item.duration) {
+                                                item.duration = zone.start + zone.duration;
+                                            }
                                             modified = true;
                                         }
                                     }
                                 } catch(e) {}
                             }
+                        } else if (zone.type === 'sozi_zip' && zone.url) {
+                            fetchSoziZipDuration(zone, item, false);
                         }
                     });
                 }
@@ -2835,19 +2878,27 @@
                 zone.webPanX = parseInt(document.getElementById('z-web-panx').value) || 0;
                 zone.webPanY = parseInt(document.getElementById('z-web-pany').value) || 0;
             } else if (newType === 'sozi_zip') {
-                zone.url = document.getElementById('z-url').value;
+                const newUrl = document.getElementById('z-url').value;
+                const urlChanged = zone.url !== newUrl;
+                zone.url = newUrl;
                 zone.webZoom = parseFloat(document.getElementById('z-web-zoom').value) / 100 || 1.0;
                 zone.webPanX = parseInt(document.getElementById('z-web-panx').value) || 0;
                 zone.webPanY = parseInt(document.getElementById('z-web-pany').value) || 0;
+                if (urlChanged && zone.url) {
+                    const item = playlistData.items[selectedIndex];
+                    fetchSoziZipDuration(zone, item, true);
+                }
             } else if (newType === 'qrcode') {
                 zone.text = document.getElementById('z-text').value || 'https://omnisign.com';
                 zone.url = "/api/admin/qrcode?text=" + encodeURIComponent(zone.text);
             } else {
-                zone.url = document.getElementById('z-url').value;
+                const newUrl = document.getElementById('z-url').value;
+                const urlChanged = zone.url !== newUrl;
+                zone.url = newUrl;
                 delete zone.webZoom;
                 delete zone.webPanX;
                 delete zone.webPanY;
-                if (newType === 'sozi') {
+                if (newType === 'sozi' && urlChanged && zone.url) {
                     const mediaRecord = availableMedia.find(m => m.url === zone.url);
                     if (mediaRecord && mediaRecord.metadata) {
                         try {
@@ -2860,6 +2911,11 @@
                                 if (totalDurationMs > 0) {
                                     zone.duration = totalDurationMs;
                                     document.getElementById('z-duration').value = zone.duration;
+                                    const item = playlistData.items[selectedIndex];
+                                    if (zone.start + zone.duration > item.duration) {
+                                        item.duration = zone.start + zone.duration;
+                                        document.getElementById('page-duration').value = item.duration;
+                                    }
                                 }
                             }
                         } catch(e) {}

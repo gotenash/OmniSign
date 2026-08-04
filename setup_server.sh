@@ -129,7 +129,7 @@ After=network.target
 [Service]
 Type=simple
 User=$CURRENT_USER
-WorkingDirectory=$CURRENT_DIR/server
+WorkingDirectory=$SCRIPT_DIR/server
 ExecStart=$NODE_PATH server.js
 Restart=on-failure
 Environment=NODE_ENV=production

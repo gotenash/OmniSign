@@ -113,3 +113,30 @@ cat /home/pi/omnisign/chromium.log
 ```bash
 sudo systemctl restart omnisign-sync.service
 ```
+
+---
+
+## Problèmes connus (Troubleshooting)
+
+### Écran noir ou résolution incorrecte sur une TV ancienne (problème d'EDID)
+
+**Symptôme** : L'écran connecté reste noir (ou affiche "Pas de signal") alors que les captures d'écran effectuées depuis le CMS fonctionnent, ou la résolution est bloquée sur une valeur basse (ex: `1024x768`) sans possibilité de passer en 1920x1080.
+
+**Cause** : Le Raspberry Pi ne parvient pas à lire les informations d'affichage (EDID) de la TV (câble HDMI défectueux, adaptateur micro-HDMI de faible qualité, ou protocole HDMI de la TV trop ancien).
+
+**Solution** : Forcer la résolution 1920x1080 au niveau du noyau Linux :
+1. Connectez-vous en SSH sur le Raspberry Pi.
+2. Ouvrez le fichier de configuration de démarrage :
+   ```bash
+   sudo nano /boot/firmware/cmdline.txt
+   ```
+3. À la fin de la **ligne unique** existante (ne faites pas de retour à la ligne), ajoutez un espace puis le paramètre suivant :
+   ```text
+   video=HDMI-A-1:1920x1080@60e
+   ```
+   *(Si vous utilisez le deuxième port HDMI du Pi, remplacez `HDMI-A-1` par `HDMI-A-2`)*
+4. Sauvegardez (`Ctrl + O`, `Entrée`) et quittez (`Ctrl + X`).
+5. Redémarrez le Pi :
+   ```bash
+   sudo reboot
+   ```

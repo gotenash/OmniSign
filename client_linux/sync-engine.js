@@ -286,9 +286,9 @@ async function syncPlaylist(playlistData) {
         // Préserver la structure des dossiers (pour Sozi)
         let relativePath;
         if (url.startsWith('/media/')) {
-            relativePath = url.substring('/media/'.length);
+            relativePath = decodeURIComponent(url.substring('/media/'.length));
         } else if (url.startsWith('/img/')) {
-            relativePath = 'img/' + url.substring('/img/'.length);
+            relativePath = 'img/' + decodeURIComponent(url.substring('/img/'.length));
         } else if (url.includes('/api/admin/qrcode')) {
             let textVal = 'default';
             try {
@@ -581,7 +581,9 @@ socket.on('request-logs', () => {
 let lastScreenState = null;
 socket.on('screen-command', (data) => {
     const action = data.action; // 'on' ou 'off'
-    if (lastScreenState === action) return; // Éviter d'exécuter inutilement si l'état est identique
+    // Pour l'allumage ('on'), on évite les répétitions pour ne pas faire clignoter l'écran ou relancer Chromium.
+    // Pour l'extinction ('off'), on ré-exécute pour éteindre si l'écran a été réactivé physiquement (ex: hotplug HDMI).
+    if (action === 'on' && lastScreenState === 'on') return;
     lastScreenState = action;
 
     const state = action === 'on' ? '1' : '0';
@@ -590,9 +592,14 @@ socket.on('screen-command', (data) => {
     // 1. Essayer via vcgencmd (RPi 3 / drivers legacy)
     exec(`vcgencmd display_power ${state}`, () => {});
 
-    const envPrefix = `export DISPLAY=:0 XAUTHORITY=${homeDir}/.Xauthority`;
-    const waylandEnv = `export XDG_RUNTIME_DIR=/run/user/${uid} WAYLAND_DISPLAY=wayland-0`;
-    const runEnv = `export DISPLAY=:0 XAUTHORITY=${homeDir}/.Xauthority XDG_RUNTIME_DIR=/run/user/${uid} WAYLAND_DISPLAY=wayland-0`;
+    const displayVal = process.env.DISPLAY || ':0';
+    const xauthVal = process.env.XAUTHORITY || `${homeDir}/.Xauthority`;
+    const runtimeDirVal = process.env.XDG_RUNTIME_DIR || `/run/user/${uid}`;
+    const waylandDisplayVal = process.env.WAYLAND_DISPLAY || 'wayland-0';
+
+    const envPrefix = `export DISPLAY=${displayVal} XAUTHORITY=${xauthVal}`;
+    const waylandEnv = `export XDG_RUNTIME_DIR=${runtimeDirVal} WAYLAND_DISPLAY=${waylandDisplayVal}`;
+    const runEnv = `export DISPLAY=${displayVal} XAUTHORITY=${xauthVal} XDG_RUNTIME_DIR=${runtimeDirVal} WAYLAND_DISPLAY=${waylandDisplayVal}`;
 
     if (action === 'off') {
         console.log("🛑 Extinction de l'écran (DPMS, Wayland, GNOME & CEC)...");
@@ -646,15 +653,62 @@ socket.on('screen-command', (data) => {
         exec(`${waylandEnv} && wlr-randr`, (err, stdout) => {
             if (!err && stdout) {
                 const lines = stdout.split('\n');
+                let currentOutput = null;
+                let preferredMode = null;
+                let isEnabled = false;
+                const outputsToEnable = [];
+
                 lines.forEach(line => {
                     if (line && !line.startsWith(' ') && (line.includes('HDMI') || line.includes('DP') || line.includes('DSI'))) {
-                        const outputName = line.split(' ')[0];
-                        if (outputName) {
-                            exec(`${waylandEnv} && wlr-randr --output ${outputName} --on`, () => {
-                                                        console.log(`📺 Écran Wayland ${outputName} allumé (wlr-randr).`);
-                            });
+                        if (currentOutput) {
+                            outputsToEnable.push({ name: currentOutput, mode: preferredMode, enabled: isEnabled });
+                        }
+                        currentOutput = line.split(' ')[0];
+                        preferredMode = null;
+                        isEnabled = false;
+                    } else if (currentOutput && line.includes('Enabled:')) {
+                        isEnabled = line.includes('Enabled: yes');
+                    } else if (currentOutput && line.includes('(preferred)')) {
+                        const match = line.trim().match(/^([0-9]+x[0-9]+)\s+px/);
+                        if (match) {
+                            preferredMode = match[1];
                         }
                     }
+                });
+                if (currentOutput) {
+                    outputsToEnable.push({ name: currentOutput, mode: preferredMode, enabled: isEnabled });
+                }
+
+                outputsToEnable.forEach(out => {
+                    if (out.enabled) {
+                        console.log(`📺 Écran Wayland ${out.name} est déjà actif.`);
+                        return;
+                    }
+                    const tryTurnOn = (attemptsLeft) => {
+                        const useMode = out.mode && attemptsLeft === 3;
+                        const cmd = useMode 
+                            ? `${waylandEnv} && wlr-randr --output ${out.name} --on --mode ${out.mode}`
+                            : `${waylandEnv} && wlr-randr --output ${out.name} --on`;
+                        
+                        exec(cmd, (execErr) => {
+                            if (!execErr) {
+                                console.log(`📺 Écran Wayland ${out.name} allumé (${useMode ? `mode ${out.mode}` : '--on'}).`);
+                            } else {
+                                console.warn(`⚠️ Échec de l'allumage de l'écran ${out.name} (${useMode ? `mode ${out.mode}` : '--on'}) : ${execErr.message.trim()}`);
+                                if (attemptsLeft > 1) {
+                                    const delay = 2000;
+                                    console.log(`🔄 Nouvelle tentative d'allumage pour ${out.name} (sans spécifier de mode) dans ${delay/1000}s...`);
+                                    setTimeout(() => tryTurnOn(attemptsLeft - 1), delay);
+                                } else {
+                                    console.error(`❌ Échec définitif de l'allumage de l'écran ${out.name} après plusieurs tentatives.`);
+                                    // Reset lastScreenState pour permettre au serveur ou à l'utilisateur de renvoyer la commande
+                                    lastScreenState = null;
+                                }
+                            }
+                        });
+                    };
+
+                    tryTurnOn(3);
                 });
             }
         });

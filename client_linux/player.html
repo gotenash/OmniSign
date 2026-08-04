@@ -1412,7 +1412,7 @@
                         const iframeScale = zoom * scaleRatio;
 
                         zoneElement.innerHTML = `<div style="width:100%;height:100%;overflow:hidden;position:relative;">
-                            <iframe src="${iframeUrl}" style="width:${iframeWidth}px;height:${iframeHeight}px;border:none;position:absolute;top:0;left:0;transform:scale(${iframeScale}) translate(${panX}%,${panY}%);transform-origin:0 0;"></iframe>
+                            <iframe src="${iframeUrl}" onload="try { this.contentDocument.head.insertAdjacentHTML('beforeend', '<style>*{cursor:none !important;}</style>'); } catch(e) {}" style="width:${iframeWidth}px;height:${iframeHeight}px;border:none;position:absolute;top:0;left:0;transform:scale(${iframeScale}) translate(${panX}%,${panY}%);transform-origin:0 0;"></iframe>
                         </div>`;
                     } else if (zone.type === 'qrcode') {
                         const qrText = zone.text || 'https://omnisign.com';
@@ -1535,7 +1535,9 @@
                     }
 
                     // Programmer l'animation de sortie
-                    if (zone.animationOut && zone.animationOut !== 'none') {
+                    const isPermanent = playlistData.items.length === 1 && !playlistData.sequenceContext && endMs >= (page.duration || 5000);
+                    
+                    if (!isPermanent && zone.animationOut && zone.animationOut !== 'none') {
                         const outDuration = zone.animationOutDuration || 800;
                         setTimeout(() => {
                             zoneElement.classList.add(`anim-${zone.animationOut}`);
@@ -1543,9 +1545,11 @@
                         }, Math.max(0, endMs - outDuration));
                     }
 
-                    setTimeout(() => {
-                        zoneElement.style.display = 'none';
-                    }, endMs);
+                    if (!isPermanent) {
+                        setTimeout(() => {
+                            zoneElement.style.display = 'none';
+                        }, endMs);
+                    }
 
                     pageZonesContainer.appendChild(zoneElement);
                 });
@@ -1561,17 +1565,21 @@
                 }
             };
 
-            const videoTpl = pageZonesContainer.querySelector('video');
-            if (page.template === 'video_fullscreen' && videoTpl && !page.data.loop) {
-                log(`Attente de la fin de la vidéo pour transition.`);
-                videoTpl.onended = moveToNext;
-                videoTpl.onerror = () => {
-                    log("Erreur de chargement de la vidéo full-screen", true);
-                    moveToNext();
-                };
+            if (playlistData.items.length > 1 || (playlistData.sequenceContext && socket)) {
+                const videoTpl = pageZonesContainer.querySelector('video');
+                if (page.template === 'video_fullscreen' && videoTpl && !page.data.loop) {
+                    log(`Attente de la fin de la vidéo pour transition.`);
+                    videoTpl.onended = moveToNext;
+                    videoTpl.onerror = () => {
+                        log("Erreur de chargement de la vidéo full-screen", true);
+                        moveToNext();
+                    };
+                } else {
+                    playTimeout = setTimeout(moveToNext, page.duration);
+                    log(`Page suivante dans ${page.duration / 1000}s.`);
+                }
             } else {
-                playTimeout = setTimeout(moveToNext, page.duration);
-                log(`Page suivante dans ${page.duration / 1000}s.`);
+                log(`Playlist d'une seule page : affichage permanent sans rechargement.`);
             }
         }
 

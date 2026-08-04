@@ -317,6 +317,8 @@
 
                     if (zone.type === 'text') {
                         zoneHtml = `<div style="color:${zone.color || 'white'}; font-size:calc(${zone.fontSize || 24}px * 0.12); font-family:${zone.fontFamily || 'sans-serif'}; text-align:${zone.textAlign || 'center'}; width:100%; word-wrap: break-word; line-height: 1.1;">${zone.text || ''}</div>`;
+                    } else if (zone.type === 'paragraph') {
+                        zoneHtml = `<div style="color:${zone.color || 'white'}; font-size:calc(${zone.fontSize || 24}px * 0.12); font-family:${zone.fontFamily || 'sans-serif'}; text-align:${zone.textAlign || 'left'}; width:100%; word-wrap: break-word; line-height: 1.1; height: 100%; overflow: hidden;">${zone.text || ''}</div>`;
                     } else if (zone.type === 'video' && zone.url) {
                         const authenticatedZoneUrl = getAuthenticatedUrl(zone.url);
                         zoneHtml = `<video src="${authenticatedZoneUrl}" muted autoplay loop playsinline style="width:100%;height:100%;object-fit:contain;"></video>`;
@@ -326,6 +328,9 @@
                         zoneHtml = `<div style="font-size:8px; color:#3498db; text-align:center;">🌐 Web</div>`;
                     } else if (zone.type === 'qrcode') {
                         zoneHtml = `<div style="font-size:8px; color:#2ecc71; text-align:center;">📱 QR</div>`;
+                    } else if (zone.type === 'sozi_zip' && zone.url) {
+                        const authenticatedZoneUrl = getAuthenticatedUrl(zone.url);
+                        zoneHtml = `<div class="sozi-zip-thumbnail" data-url="${authenticatedZoneUrl}" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:8px; color:#e67e22; text-align:center;">📦 Sozi</div>`;
                     } else if (zone.url) {
                         const authenticatedZoneUrl = getAuthenticatedUrl(zone.url);
                         zoneHtml = `<img src="${authenticatedZoneUrl}" style="max-width:100%; max-height:100%; object-fit:contain;">`;
@@ -335,6 +340,41 @@
                 });
             }
             return html;
+        }
+
+        async function loadSoziZipThumbnails(parentEl = document) {
+            const elements = parentEl.querySelectorAll('.sozi-zip-thumbnail');
+            elements.forEach(async (el) => {
+                if (el.dataset.loaded || el.dataset.loading) return;
+                el.dataset.loading = 'true';
+                
+                const url = el.dataset.url;
+                try {
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error("Erreur HTTP");
+                    const htmlText = await res.text();
+                    
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlText, 'text/html');
+                    const svgEl = doc.querySelector('svg');
+                    if (svgEl) {
+                        svgEl.removeAttribute('width');
+                        svgEl.removeAttribute('height');
+                        svgEl.style.width = '100%';
+                        svgEl.style.height = '100%';
+                        svgEl.style.objectFit = 'contain';
+                        
+                        el.innerHTML = '';
+                        el.appendChild(svgEl);
+                        el.dataset.loaded = 'true';
+                    }
+                } catch (e) {
+                    console.error("Erreur chargement SVG Sozi:", e);
+                    el.innerHTML = '📦 Sozi';
+                } finally {
+                    delete el.dataset.loading;
+                }
+            });
         }
 
         function renderPageInThumbnail(thumbnailEl, playlist, item) {
@@ -357,6 +397,7 @@
             }
 
             thumbnailEl.innerHTML = getPageThumbnailHtml(playlist, item);
+            loadSoziZipThumbnails(thumbnailEl);
         }
 
         function setLayoutMode(mode) {
@@ -536,6 +577,7 @@
                     </div>
                 </div>`;
             }).join('');
+            loadSoziZipThumbnails();
         }
 
         async function deletePlaylist(id) {
