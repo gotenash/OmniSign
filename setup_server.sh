@@ -116,6 +116,7 @@ echo "------------------------------------------------------------"
 read -p "Voulez-vous installer le serveur en tant que service système pour qu'il démarre seul au boot ? (O/N) : " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Oo]$ ]]; then
+    SYSTEMD_INSTALLED=true
     NODE_PATH=$(which node)
     CURRENT_USER=$USER
     CURRENT_DIR=$(pwd)
@@ -143,6 +144,7 @@ EOF"
     sudo systemctl restart omnisign-server.service
     echo -e "${GREEN}[OK] Service systemd activé et démarré ! (omnisign-server.service)${NC}"
 else
+    SYSTEMD_INSTALLED=false
     echo -e "${YELLOW}[INFO] Configuration systemd ignorée. Le serveur devra être lancé manuellement.${NC}"
 fi
 
@@ -169,11 +171,17 @@ echo -e "   ${BLUE}./Lancer_OmniSign.sh${NC}"
 echo " ou depuis le raccourci sur le Bureau."
 echo ""
 
-read -p "Voulez-vous démarrer le serveur OmniSign maintenant ? (O/N) : " -n 1 -r
-echo ""
-if [[ $REPLY =~ ^[Oo]$ ]]; then
-    echo "Démarrage du serveur..."
-    "$LAUNCHER_SCRIPT"
-else
+if [ "$SYSTEMD_INSTALLED" = true ]; then
+    echo -e "${GREEN}[INFO] Le serveur est déjà en cours d'exécution en arrière-plan en tant que service systemd.${NC}"
+    echo "Vous pouvez accéder à l'interface web à l'adresse http://localhost:3000 (ou avec l'adresse IP de votre machine)."
     echo "Merci d'avoir installé OmniSign !"
+else
+    read -p "Voulez-vous démarrer le serveur OmniSign maintenant ? (O/N) : " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Oo]$ ]]; then
+        echo "Démarrage du serveur..."
+        "$LAUNCHER_SCRIPT"
+    else
+        echo "Merci d'avoir installé OmniSign !"
+    fi
 fi
