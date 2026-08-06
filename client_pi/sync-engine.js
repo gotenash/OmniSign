@@ -585,27 +585,142 @@ socket.on('request-logs', () => {
 });
 
 let lastScreenState = 'on';
+
+const envPrefix = 'export DISPLAY=:0 XAUTHORITY=/home/pi/.Xauthority';
+const waylandEnv = 'export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0';
+const runEnv = 'export DISPLAY=:0 XAUTHORITY=/home/pi/.Xauthority XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0';
+
+const sendCecOn = (device = '') => {
+    const devArg = device ? ` ${device}` : '';
+    exec(`echo "on 0" | cec-client -s -d 1${devArg}`, (cecErr) => {
+        if (!cecErr && !device) console.log("📺 Commande d'allumage HDMI-CEC envoyée à la TV.");
+        // Envoyer également 'Active Source' (as) après 1 seconde pour forcer le canal/réveil de certaines TV
+        setTimeout(() => {
+            exec(`echo "as" | cec-client -s -d 1${devArg}`, () => {});
+        }, 1000);
+    });
+};
+
+const wakeUpScreen = (skipPlayerRelaunch = false) => {
+    // 1. Essayer via vcgencmd (RPi 3 / drivers legacy)
+    exec('vcgencmd display_power 1', () => {});
+
+    console.log("🚀 Allumage de l'écran (DPMS, Wayland, GNOME & CEC)...");
+
+    // A. X11 DPMS
+    exec(`${envPrefix} && xset +dpms && xset dpms force on`, (error) => {
+        if (!error) console.log("📺 Veille DPMS X11 désactivée.");
+    });
+
+    // B. Wayland wlr-randr
+    exec(`${waylandEnv} && wlr-randr`, (err, stdout) => {
+        if (!err && stdout) {
+            const lines = stdout.split('\n');
+            let currentOutput = null;
+            let preferredMode = null;
+            const outputsToEnable = [];
+
+            lines.forEach(line => {
+                if (line && !line.startsWith(' ') && (line.includes('HDMI') || line.includes('DP') || line.includes('DSI'))) {
+                    if (currentOutput) {
+                        outputsToEnable.push({ name: currentOutput, mode: preferredMode });
+                    }
+                    currentOutput = line.split(' ')[0];
+                    preferredMode = null;
+                } else if (currentOutput && line.includes('(preferred)')) {
+                    const match = line.trim().match(/^([0-9]+x[0-9]+)\s+px/);
+                    if (match) {
+                        preferredMode = match[1];
+                    }
+                }
+            });
+            if (currentOutput) {
+                outputsToEnable.push({ name: currentOutput, mode: preferredMode });
+            }
+
+            outputsToEnable.forEach(out => {
+                const tryTurnOn = (attemptsLeft) => {
+                    const useMode = out.mode && attemptsLeft === 3;
+                    const cmd = useMode 
+                        ? `${waylandEnv} && wlr-randr --output ${out.name} --on --mode ${out.mode}`
+                        : `${waylandEnv} && wlr-randr --output ${out.name} --on`;
+                    
+                    exec(cmd, (execErr) => {
+                        if (!execErr) {
+                            console.log(`📺 Écran Wayland ${out.name} allumé (${useMode ? `mode ${out.mode}` : '--on'}).`);
+                        } else {
+                            console.warn(`⚠️ Échec de l'allumage de l'écran ${out.name} (${useMode ? `mode ${out.mode}` : '--on'}) : ${execErr.message.trim()}`);
+                            if (attemptsLeft > 1) {
+                                const delay = 2000;
+                                console.log(`🔄 Nouvelle tentative d'allumage pour ${out.name} (sans spécifier de mode) dans ${delay/1000}s...`);
+                                setTimeout(() => tryTurnOn(attemptsLeft - 1), delay);
+                            } else {
+                                console.error(`❌ Échec définitif de l'allumage de l'écran ${out.name} après plusieurs tentatives.`);
+                            }
+                        }
+                    });
+                };
+
+                tryTurnOn(3);
+            });
+        }
+    });
+
+    // C. Wayland wlopm
+    exec(`${waylandEnv} && wlopm --on HDMI-A-1`, () => {});
+    exec(`${waylandEnv} && wlopm --on HDMI-A-2`, () => {});
+
+    // D. HDMI-CEC (Téléviseurs)
+    sendCecOn();
+    sendCecOn('/dev/cec0');
+    sendCecOn('/dev/cec1');
+
+    // E. GNOME Mutter via busctl/dbus-send (Wayland & X11 GNOME sessions)
+    exec('busctl --user set-property org.gnome.Mutter.DisplayConfig /org/gnome/Mutter/DisplayConfig org.gnome.Mutter.DisplayConfig PowerSaveMode i 0', () => {});
+    exec('dbus-send --session --dest=org.gnome.ScreenSaver --type=method_call /org/gnome/ScreenSaver org.gnome.ScreenSaver.SetActive boolean:false', () => {});
+
+    // F. Nettoyer et relancer le player en arrière-plan (avec X11 & Wayland env)
+    if (!skipPlayerRelaunch) {
+        setTimeout(() => {
+            console.log("📺 Nettoyage et lancement du player Chromium...");
+            exec('pkill -f start_player.sh; pkill -f chromium; pkill -f unclutter', () => {
+                exec(`${runEnv} && /home/pi/omnisign/start_player.sh &`, (launchErr) => {
+                    if (launchErr) {
+                        console.error(`❌ Erreur lors du lancement du player : ${launchErr.message}`);
+                    } else {
+                        console.log("📺 Player Chromium relancé.");
+                    }
+                });
+            });
+        }, 1500); // Petite pause pour s'assurer que le signal vidéo est bien revenu
+    } else {
+        console.log("📺 Les commandes physiques d'allumage ont été renvoyées sans relancer Chromium.");
+    }
+};
+
 socket.on('screen-command', (data) => {
     const action = data.action; // 'on' ou 'off'
-    // Pour l'allumage ('on'), on évite les répétitions pour ne pas faire clignoter l'écran ou relancer Chromium.
-    // Pour l'extinction ('off'), on ré-exécute pour éteindre si l'écran a été réactivé physiquement (ex: hotplug HDMI).
-    if (action === 'on' && lastScreenState === 'on') return;
+    
+    // Si on demande l'allumage et que l'état interne était déjà 'on',
+    // on évite de relancer le player Chromium, mais on renvoie les commandes physiques
+    // (CEC, DPMS, etc.) pour s'assurer que la TV est allumée.
+    const skipPlayerRelaunch = (action === 'on' && lastScreenState === 'on');
+    
+    // Pour l'extinction, on évite d'éteindre à nouveau si déjà éteint.
+    if (action === 'off' && lastScreenState === 'off') return;
+    
     lastScreenState = action;
 
     const state = action === 'on' ? '1' : '0';
     console.log(`📺 Commande écran reçue : force ${state}`);
-    
-    // 1. Essayer via vcgencmd (RPi 3 / drivers legacy)
-    exec(`vcgencmd display_power ${state}`, () => {});
-
-    const envPrefix = 'export DISPLAY=:0 XAUTHORITY=/home/pi/.Xauthority';
-    const waylandEnv = 'export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0';
-    const runEnv = 'export DISPLAY=:0 XAUTHORITY=/home/pi/.Xauthority XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0';
 
     if (action === 'off') {
         console.log("🛑 Extinction de l'écran (DPMS, Wayland, GNOME & CEC)...");
         
-        // A. Fermer Chromium et unclutter pour libérer la veille
+        // A. Essayer via vcgencmd (RPi 3 / drivers legacy)
+        exec('vcgencmd display_power 0', () => {});
+
+        // B. Fermer Chromium et unclutter pour libérer la veille
         exec('pkill -f start_player.sh; pkill -f chromium; pkill -f unclutter', () => {
             // B. X11 DPMS
             exec(`${envPrefix} && xset +dpms && xset dpms force off`, (error) => {
@@ -634,106 +749,33 @@ socket.on('screen-command', (data) => {
             exec(`${waylandEnv} && wlopm --off HDMI-A-2`, () => {});
 
             // E. HDMI-CEC (Téléviseurs)
-            exec('echo "standby 0" | cec-client -s -d 1', (cecErr) => {
-                if (!cecErr) console.log("📺 Commande de veille HDMI-CEC envoyée à la TV.");
-            });
+            const sendCecOff = (device = '') => {
+                const devArg = device ? ` ${device}` : '';
+                exec(`echo "standby 0" | cec-client -s -d 1${devArg}`, (cecErr) => {
+                    if (!cecErr && !device) console.log("📺 Commande de veille HDMI-CEC envoyée à la TV.");
+                });
+            };
+            sendCecOff();
+            sendCecOff('/dev/cec0');
+            sendCecOff('/dev/cec1');
 
             // F. GNOME Mutter via busctl/dbus-send (Wayland & X11 GNOME sessions)
             exec('busctl --user set-property org.gnome.Mutter.DisplayConfig /org/gnome/Mutter/DisplayConfig org.gnome.Mutter.DisplayConfig PowerSaveMode i 1', () => {});
             exec('dbus-send --session --dest=org.gnome.ScreenSaver --type=method_call /org/gnome/ScreenSaver org.gnome.ScreenSaver.SetActive boolean:true', () => {});
         });
     } else {
-        console.log("🚀 Allumage de l'écran (DPMS, Wayland, GNOME & CEC)...");
-
-        // A. X11 DPMS
-        exec(`${envPrefix} && xset +dpms && xset dpms force on`, (error) => {
-            if (!error) console.log("📺 Veille DPMS X11 désactivée.");
-        });
-
-        // B. Wayland wlr-randr
-        exec(`${waylandEnv} && wlr-randr`, (err, stdout) => {
-            if (!err && stdout) {
-                const lines = stdout.split('\n');
-                let currentOutput = null;
-                let preferredMode = null;
-                const outputsToEnable = [];
-
-                lines.forEach(line => {
-                    if (line && !line.startsWith(' ') && (line.includes('HDMI') || line.includes('DP') || line.includes('DSI'))) {
-                        if (currentOutput) {
-                            outputsToEnable.push({ name: currentOutput, mode: preferredMode });
-                        }
-                        currentOutput = line.split(' ')[0];
-                        preferredMode = null;
-                    } else if (currentOutput && line.includes('(preferred)')) {
-                        const match = line.trim().match(/^([0-9]+x[0-9]+)\s+px/);
-                        if (match) {
-                            preferredMode = match[1];
-                        }
-                    }
-                });
-                if (currentOutput) {
-                    outputsToEnable.push({ name: currentOutput, mode: preferredMode });
-                }
-
-                outputsToEnable.forEach(out => {
-                    const tryTurnOn = (attemptsLeft) => {
-                        const useMode = out.mode && attemptsLeft === 3;
-                        const cmd = useMode 
-                            ? `${waylandEnv} && wlr-randr --output ${out.name} --on --mode ${out.mode}`
-                            : `${waylandEnv} && wlr-randr --output ${out.name} --on`;
-                        
-                        exec(cmd, (execErr) => {
-                            if (!execErr) {
-                                console.log(`📺 Écran Wayland ${out.name} allumé (${useMode ? `mode ${out.mode}` : '--on'}).`);
-                            } else {
-                                console.warn(`⚠️ Échec de l'allumage de l'écran ${out.name} (${useMode ? `mode ${out.mode}` : '--on'}) : ${execErr.message.trim()}`);
-                                if (attemptsLeft > 1) {
-                                    const delay = 2000;
-                                    console.log(`🔄 Nouvelle tentative d'allumage pour ${out.name} (sans spécifier de mode) dans ${delay/1000}s...`);
-                                    setTimeout(() => tryTurnOn(attemptsLeft - 1), delay);
-                                } else {
-                                    console.error(`❌ Échec définitif de l'allumage de l'écran ${out.name} après plusieurs tentatives.`);
-                                    // Reset lastScreenState pour permettre au serveur ou à l'utilisateur de renvoyer la commande
-                                    lastScreenState = null;
-                                }
-                            }
-                        });
-                    };
-
-                    tryTurnOn(3);
-                });
-            }
-        });
-
-        // C. Wayland wlopm
-        exec(`${waylandEnv} && wlopm --on HDMI-A-1`, () => {});
-        exec(`${waylandEnv} && wlopm --on HDMI-A-2`, () => {});
-
-        // D. HDMI-CEC (Téléviseurs)
-        exec('echo "on 0" | cec-client -s -d 1', (cecErr) => {
-            if (!cecErr) console.log("📺 Commande d'allumage HDMI-CEC envoyée à la TV.");
-        });
-
-        // E. GNOME Mutter via busctl/dbus-send (Wayland & X11 GNOME sessions)
-        exec('busctl --user set-property org.gnome.Mutter.DisplayConfig /org/gnome/Mutter/DisplayConfig org.gnome.Mutter.DisplayConfig PowerSaveMode i 0', () => {});
-        exec('dbus-send --session --dest=org.gnome.ScreenSaver --type=method_call /org/gnome/ScreenSaver org.gnome.ScreenSaver.SetActive boolean:false', () => {});
-
-        // E. Nettoyer et relancer le player en arrière-plan (avec X11 & Wayland env)
-        setTimeout(() => {
-            console.log("📺 Nettoyage et lancement du player Chromium...");
-            exec('pkill -f start_player.sh; pkill -f chromium; pkill -f unclutter', () => {
-                exec(`${runEnv} && /home/pi/omnisign/start_player.sh &`, (launchErr) => {
-                    if (launchErr) {
-                        console.error(`❌ Erreur lors du lancement du player : ${launchErr.message}`);
-                    } else {
-                        console.log("📺 Player Chromium relancé.");
-                    }
-                });
-            });
-        }, 1500); // Petite pause pour s'assurer que le signal vidéo est bien revenu
+        wakeUpScreen(skipPlayerRelaunch);
     }
 });
+
+// Watchdog pour renvoyer périodiquement les signaux d'allumage si l'écran doit être actif
+// Cela permet de rallumer la TV si un utilisateur l'a mise en veille avec la télécommande.
+setInterval(() => {
+    if (lastScreenState === 'on') {
+        console.log("⏰ Watchdog : Maintien de l'écran allumé (CEC/DPMS)...");
+        wakeUpScreen(true);
+    }
+}, 60000); // Toutes les minutes
 
 // Écouter les commandes de capture d'écran
 socket.on('request-screenshot', () => {
