@@ -181,10 +181,18 @@ Before launching a client installer, ensure you have logged into the OmniSign ad
 
 #### B. Raspberry Pi Client (`client_pi/`)
 *Compatible with Raspberry Pi OS Bookworm or newer (Desktop variant).*
-1. Navigate to the client directory and run the installer:
+1. Quick installation:
    ```bash
-   cd client_pi
-   bash installer_pi.sh
+   # A. For Raspberry Pi OS:
+
+   # 1. Create target directory and navigate to it
+   mkdir -p /home/pi/omnisign && cd /home/pi/omnisign
+
+   # 2. Download and extract only the Pi client from GitHub
+   curl -sL https://github.com/gotenash/OmniSign/tarball/main | tar -xz --strip-components=2 --wildcards "*/client_pi/*"
+
+   # 3. Make executable and run the installer
+   chmod +x installer_pi.sh && ./installer_pi.sh
    ```
 2. The interactive script will ask for the Server URL, API Key, and Device ID, writing them to `/boot/firmware/setup.txt`.
 3. It installs `nodejs`, `npm`, `chromium-browser`, and `unclutter` (to hide the mouse cursor).
@@ -366,10 +374,18 @@ Avant de lancer l'installateur d'un client, connectez-vous au panneau d'administ
 
 #### B. Client Raspberry Pi (`client_pi/`)
 *Compatible avec Raspberry Pi OS Bookworm ou supérieur (version Desktop).*
-1. Ouvrez un terminal dans le dossier du client Pi :
+1. Installation rapide :
    ```bash
-   cd client_pi
-   bash installer_pi.sh
+   # A. Pour Raspberry Pi OS :
+
+   # 1. Créer le dossier cible et s'y rendre
+   mkdir -p /home/pi/omnisign && cd /home/pi/omnisign
+
+   # 2. Télécharger et extraire uniquement le client Pi depuis GitHub
+   curl -sL https://github.com/gotenash/OmniSign/tarball/main | tar -xz --strip-components=2 --wildcards "*/client_pi/*"
+
+   # 3. Rendre exécutable et lancer l'installateur
+   chmod +x installer_pi.sh && ./installer_pi.sh
    ```
 2. L'assistant vous demandera l'URL du serveur, la clé API et l'identifiant de l'écran, puis les écrira dans `/boot/firmware/setup.txt`.
 3. Il installera `nodejs`, `npm`, `chromium-browser`, et `unclutter` (pour masquer la souris).
