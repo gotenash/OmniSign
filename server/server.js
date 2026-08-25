@@ -600,9 +600,19 @@ async function initializeDatabase() {
                 table.integer('capacity').defaultTo(10);
                 table.string('location').defaultTo('');
                 table.string('color').defaultTo('#3498db');
+                table.string('photo').nullable().defaultTo('');
                 table.timestamp('createdAt').defaultTo(db.fn.now());
             });
             console.log('Table "meeting_rooms" créée.');
+        } else {
+            // S'assurer que la colonne 'photo' existe pour les installations existantes
+            const hasPhotoColumn = await db.schema.hasColumn('meeting_rooms', 'photo');
+            if (!hasPhotoColumn) {
+                await db.schema.table('meeting_rooms', (table) => {
+                    table.string('photo').nullable().defaultTo('');
+                });
+                console.log('Colonne "photo" ajoutée à la table "meeting_rooms".');
+            }
         }
     });
 
@@ -1020,7 +1030,21 @@ async function seedDefaultTemplates() {
                     borderWidth: '2',
                     borderRadius: '12',
                     customCss: '.neon-card { box-shadow: 0 0 15px rgba(0,242,254,0.3); } .neon-badge { padding: 4px 12px; border-radius: 4px; font-weight: bold; }',
-                    customHtml: `<div class="neon-card" style="padding:20px; border:1px solid #00f2fe; border-radius:8px; background:rgba(0,242,254,0.02); height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between;">\n  <div>\n    <div style="color:{{titleColor}}; font-size:{{titleFontSize}}px; font-weight:bold; letter-spacing:-1px; border-left:4px solid {{titleColor}}; padding-left:10px; margin-bottom:15px;">{{room}}</div>\n    <div style="color:{{textColor}}; font-size:{{textFontSize}}px;">📢 {{subject}}</div>\n  </div>\n  <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(0,242,254,0.1); padding-top:15px;">\n    <span class="neon-badge" style="background:{{badgeBg}}; color:white;">STATUS: {{status}}</span>\n    <span style="color:#6366f1; font-weight:bold;">🕒 {{startTime}} - {{endTime}}</span>\n  </div>\n</div>`
+                    customHtml: `<div class="neon-card" style="padding:20px; border:1px solid #00f2fe; border-radius:8px; background:rgba(0,242,254,0.02); height:100%; box-sizing:border-box; display:flex; gap:25px; align-items:stretch;">
+  <div class="room-photo-container" style="flex:1.2; display:flex; align-items:center; justify-content:center;">
+    <img src="{{photo}}" style="width:100%; max-height:85vh; object-fit:cover; border-radius:6px; border:1px solid #00f2fe; box-shadow:0 0 10px rgba(0,242,254,0.2);" onerror="this.closest('.room-photo-container').style.display='none';">
+  </div>
+  <div style="flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+    <div>
+      <div style="color:{{titleColor}}; font-size:{{titleFontSize}}px; font-weight:bold; letter-spacing:-1px; border-left:4px solid {{titleColor}}; padding-left:10px; margin-bottom:15px;">{{room}}</div>
+      <div style="color:{{textColor}}; font-size:{{textFontSize}}px;">📢 {{subject}}</div>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(0,242,254,0.1); padding-top:15px;">
+      <span class="neon-badge" style="background:{{badgeBg}}; color:white;">STATUS: {{status}}</span>
+      <span style="color:#6366f1; font-weight:bold;">🕒 {{startTime}} - {{endTime}}</span>
+    </div>
+  </div>
+</div>`
                 }),
                 updatedAt: new Date().toISOString()
             },
@@ -1046,7 +1070,19 @@ async function seedDefaultTemplates() {
                     borderWidth: '0',
                     borderRadius: '0',
                     customCss: '',
-                    customHtml: `<div style="padding:40px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; text-align:center; font-family:sans-serif;">\n  <div style="background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:24px; padding:40px; box-shadow:0 8px 32px rgba(0,0,0,0.3); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); display:inline-block; margin:0 auto; width:80%;">\n    <div style="font-size:22px; color:#38bdf8; font-weight:bold; text-transform:uppercase; letter-spacing:3px; margin-bottom:15px;">📍 {{room}}</div>\n    <div style="font-size:38px; color:#ffffff; font-weight:bold; margin-bottom:10px;">{{subject}}</div>\n    <div style="font-size:22px; color:#94a3b8; font-weight:500; margin-bottom:30px;">⏱️ {{startTime}} - {{endTime}}</div>\n    <div>\n      <span style="display:inline-block; padding:10px 30px; font-size:18px; font-weight:bold; border-radius:100px; color:#ffffff; background:{{badgeBg}};">{{status}}</span>\n    </div>\n  </div>\n</div>`
+                    customHtml: `<div style="padding:40px; height:100%; box-sizing:border-box; display:flex; gap:30px; align-items:center; justify-content:center; font-family:sans-serif;">
+  <div class="room-photo-container" style="flex:1.2; display:flex; align-items:center; justify-content:center; height:80%;">
+    <img src="{{photo}}" style="width:100%; max-height:75vh; object-fit:cover; border-radius:24px; border:1px solid rgba(255,255,255,0.15); box-shadow:0 8px 32px rgba(0,0,0,0.3);" onerror="this.closest('.room-photo-container').style.display='none';">
+  </div>
+  <div style="flex:1; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:24px; padding:40px; box-shadow:0 8px 32px rgba(0,0,0,0.3); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); text-align:center;">
+    <div style="font-size:22px; color:#38bdf8; font-weight:bold; text-transform:uppercase; letter-spacing:3px; margin-bottom:15px;">📍 {{room}}</div>
+    <div style="font-size:38px; color:#ffffff; font-weight:bold; margin-bottom:10px;">{{subject}}</div>
+    <div style="font-size:22px; color:#94a3b8; font-weight:500; margin-bottom:30px;">⏱️ {{startTime}} - {{endTime}}</div>
+    <div>
+      <span style="display:inline-block; padding:10px 30px; font-size:18px; font-weight:bold; border-radius:100px; color:#ffffff; background:{{badgeBg}};">{{status}}</span>
+    </div>
+  </div>
+</div>`
                 }),
                 updatedAt: new Date().toISOString()
             },
@@ -1072,7 +1108,25 @@ async function seedDefaultTemplates() {
                     borderWidth: '0',
                     borderRadius: '0',
                     customCss: '',
-                    customHtml: `<div style="border-top:10px solid #d4af37; padding:40px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; font-family:sans-serif; color:#ffffff;">\n  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">\n    <span style="font-size:32px; font-weight:bold; color:#d4af37;">🏢 {{room}}</span>\n    <span style="display:inline-block; padding:6px 15px; font-size:16px; font-weight:bold; border-radius:4px; color:#ffffff; background:{{badgeBg}};">{{status}}</span>\n  </div>\n  <div style="margin:40px 0;">\n    <span style="font-size:18px; color:#94a3b8; font-weight:bold; display:block; margin-bottom:5px; text-transform:uppercase; letter-spacing:1px;">SUJET DE RÉUNION</span>\n    <span style="font-size:36px; font-weight:bold; display:block;">{{subject}}</span>\n  </div>\n  <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); padding:15px; border-radius:8px;">\n    <span style="font-size:20px; color:#94a3b8;">Créneau réservé</span>\n    <span style="font-size:24px; font-weight:bold; color:#d4af37;">🕒 {{startTime}} - {{endTime}}</span>\n  </div>\n</div>`
+                    customHtml: `<div style="border-top:10px solid #d4af37; padding:40px; height:100%; box-sizing:border-box; display:flex; gap:30px; font-family:sans-serif; color:#ffffff;">
+  <div class="room-photo-container" style="flex:1.2; display:flex; align-items:center; justify-content:center;">
+    <img src="{{photo}}" style="width:100%; max-height:80vh; object-fit:cover; border-radius:8px; border:2px solid rgba(255,255,255,0.05); box-shadow:0 15px 30px rgba(0,0,0,0.4);" onerror="this.closest('.room-photo-container').style.display='none';">
+  </div>
+  <div style="flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">
+      <span style="font-size:32px; font-weight:bold; color:#d4af37;">🏢 {{room}}</span>
+      <span style="display:inline-block; padding:6px 15px; font-size:16px; font-weight:bold; border-radius:4px; color:#ffffff; background:{{badgeBg}};">{{status}}</span>
+    </div>
+    <div style="margin:20px 0;">
+      <span style="font-size:18px; color:#94a3b8; font-weight:bold; display:block; margin-bottom:5px; text-transform:uppercase; letter-spacing:1px;">SUJET DE RÉUNION</span>
+      <span style="font-size:36px; font-weight:bold; display:block;">{{subject}}</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); padding:15px; border-radius:8px;">
+      <span style="font-size:20px; color:#94a3b8;">Créneau réservé</span>
+      <span style="font-size:24px; font-weight:bold; color:#d4af37;">🕒 {{startTime}} - {{endTime}}</span>
+    </div>
+  </div>
+</div>`
                 }),
                 updatedAt: new Date().toISOString()
             },
@@ -1098,7 +1152,26 @@ async function seedDefaultTemplates() {
                     borderWidth: '0',
                     borderRadius: '0',
                     customCss: '',
-                    customHtml: `<div style="padding:40px; height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; font-family:sans-serif; color:#ffffff;">\n  <div>\n    <div style="font-size:60px; font-weight:900; letter-spacing:-2px; text-transform:uppercase; line-height:1; margin-bottom:10px;">{{room}}</div>\n    <div style="font-size:20px; font-weight:bold; opacity:0.9;">PLANNING DE SALLE</div>\n  </div>\n  <div style="background:#ffffff; color:#ff7a00; padding:25px; border-radius:20px; box-shadow:0 10px 20px rgba(0,0,0,0.15); margin: 20px 0;">\n    <div style="font-size:16px; font-weight:bold; color:#888888; text-transform:uppercase; margin-bottom:5px;">RÉUNION ACTUELLE</div>\n    <div style="font-size:32px; font-weight:bold; line-height:1.2; margin-bottom:10px;">{{subject}}</div>\n    <div style="font-size:20px; font-weight:bold; color:#ff7a00;">⏱️ {{startTime}} - {{endTime}}</div>\n  </div>\n  <div style="display:flex; justify-content:space-between; align-items:center;">\n    <span style="font-size:16px; font-weight:bold; opacity:0.8;">STATUT :</span>\n    <span style="display:inline-block; padding:8px 25px; font-size:16px; font-weight:bold; border-radius:100px; color:#ffffff; background:{{badgeBg}}; border:2px solid #ffffff;">{{status}}</span>\n  </div>\n</div>`
+                    customHtml: `<div style="padding:40px; height:100%; box-sizing:border-box; display:flex; gap:30px; font-family:sans-serif; color:#ffffff;">
+  <div class="room-photo-container" style="flex:1.2; display:flex; align-items:center; justify-content:center;">
+    <img src="{{photo}}" style="width:100%; max-height:80vh; object-fit:cover; border-radius:20px; border:3px solid #ffffff; box-shadow:0 10px 20px rgba(0,0,0,0.15);" onerror="this.closest('.room-photo-container').style.display='none';">
+  </div>
+  <div style="flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+    <div>
+      <div style="font-size:60px; font-weight:900; letter-spacing:-2px; text-transform:uppercase; line-height:1; margin-bottom:10px;">{{room}}</div>
+      <div style="font-size:20px; font-weight:bold; opacity:0.9;">PLANNING DE SALLE</div>
+    </div>
+    <div style="background:#ffffff; color:#ff7a00; padding:25px; border-radius:20px; box-shadow:0 10px 20px rgba(0,0,0,0.15); margin: 20px 0;">
+      <div style="font-size:16px; font-weight:bold; color:#888888; text-transform:uppercase; margin-bottom:5px;">RÉUNION ACTUELLE</div>
+      <div style="font-size:32px; font-weight:bold; line-height:1.2; margin-bottom:10px;">{{subject}}</div>
+      <div style="font-size:20px; font-weight:bold; color:#ff7a00;">⏱️ {{startTime}} - {{endTime}}</div>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span style="font-size:16px; font-weight:bold; opacity:0.8;">STATUT :</span>
+      <span style="display:inline-block; padding:8px 25px; font-size:16px; font-weight:bold; border-radius:100px; color:#ffffff; background:{{badgeBg}}; border:2px solid #ffffff;">{{status}}</span>
+    </div>
+  </div>
+</div>`
                 }),
                 updatedAt: new Date().toISOString()
             },
@@ -1124,7 +1197,24 @@ async function seedDefaultTemplates() {
                     borderWidth: '0',
                     borderRadius: '0',
                     customCss: '',
-                    customHtml: `<div style="border:2px solid #78716c; margin:20px; padding:35px; height:calc(100% - 40px); box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; font-family:serif; color:#f5f5f4;">\n  <div style="text-align:center;">\n    <div style="font-size:36px; font-weight:bold; letter-spacing:2px; font-family:serif; text-transform:uppercase; color:#e7e5e4;">✨ {{room}} ✨</div>\n    <div style="width:100px; height:1px; background:#78716c; margin:15px auto;"></div>\n  </div>\n  <div style="text-align:center; padding: 20px 0;">\n    <div style="font-size:32px; font-family:serif; font-style:italic; color:#f5f5f4; margin-bottom:15px;">{{subject}}</div>\n    <span style="display:inline-block; font-family:sans-serif; padding:5px 20px; border-radius:20px; border:1px solid #78716c; background:{{badgeBg}}; color:#ffffff; font-size:14px; font-weight:bold; letter-spacing:1px; text-transform:uppercase;">{{status}}</span>\n  </div>\n  <div style="text-align:center; font-size:20px; color:#a8a29e;">\n    <span>Horaires de réservation : <b>{{startTime}} - {{endTime}}</b></span>\n  </div>\n</div>`
+                    customHtml: `<div style="border:2px solid #78716c; margin:20px; padding:35px; height:calc(100% - 40px); box-sizing:border-box; display:flex; gap:30px; font-family:serif; color:#f5f5f4;">
+  <div class="room-photo-container" style="flex:1.2; display:flex; align-items:center; justify-content:center;">
+    <img src="{{photo}}" style="width:100%; max-height:75vh; object-fit:cover; border-radius:4px; border:1px solid #78716c; box-shadow:0 8px 16px rgba(0,0,0,0.5);" onerror="this.closest('.room-photo-container').style.display='none';">
+  </div>
+  <div style="flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+    <div style="text-align:center;">
+      <div style="font-size:36px; font-weight:bold; letter-spacing:2px; font-family:serif; text-transform:uppercase; color:#e7e5e4;">✨ {{room}} ✨</div>
+      <div style="width:100px; height:1px; background:#78716c; margin:15px auto;"></div>
+    </div>
+    <div style="text-align:center; padding: 20px 0;">
+      <div style="font-size:32px; font-family:serif; font-style:italic; color:#f5f5f4; margin-bottom:15px;">{{subject}}</div>
+      <span style="display:inline-block; font-family:sans-serif; padding:5px 20px; border-radius:20px; border:1px solid #78716c; background:{{badgeBg}}; color:#ffffff; font-size:14px; font-weight:bold; letter-spacing:1px; text-transform:uppercase;">{{status}}</span>
+    </div>
+    <div style="text-align:center; font-size:20px; color:#a8a29e;">
+      <span>Horaires de réservation : <b>{{startTime}} - {{endTime}}</b></span>
+    </div>
+  </div>
+</div>`
                 }),
                 updatedAt: new Date().toISOString()
             }
@@ -1139,6 +1229,9 @@ async function seedDefaultTemplates() {
                 }
                 await db('custom_templates').insert(t);
                 console.log(`Modèle système par défaut "${t.name}" inséré.`);
+            } else if (exists.isSystem) {
+                // Mettre à jour la config (avec le HTML mis à jour) pour les modèles système existants
+                await db('custom_templates').where({ id: t.id }).update({ config: t.config });
             }
         }
     } catch (err) {
@@ -3493,9 +3586,26 @@ app.get('/api/admin/meeting-rooms', authMiddleware, checkRole(['admin', 'editor'
     }
 });
 
+app.post('/api/admin/meeting-rooms/upload', authMiddleware, checkRole(['admin', 'editor', 'secretary']), upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).send('Aucun fichier uploadé.');
+        
+        const roomsImgDir = path.join(__dirname, 'img', 'rooms');
+        await fs.ensureDir(roomsImgDir);
+        
+        const destPath = path.join(roomsImgDir, req.file.filename);
+        await fs.move(req.file.path, destPath);
+        
+        const fileUrl = `/img/rooms/${req.file.filename}`;
+        res.json({ success: true, url: fileUrl });
+    } catch (err) {
+        res.status(500).send('Erreur lors du téléchargement de la photo : ' + err.message);
+    }
+});
+
 app.post('/api/admin/meeting-rooms', authMiddleware, checkRole(['admin', 'editor', 'secretary']), async (req, res) => {
     try {
-        const { id, name, capacity, location, color, siteId } = req.body;
+        const { id, name, capacity, location, color, siteId, photo } = req.body;
         if (!name) return res.status(400).send('Le nom de la salle est requis.');
 
         let targetSiteId = req.user.siteId;
@@ -3514,7 +3624,8 @@ app.post('/api/admin/meeting-rooms', authMiddleware, checkRole(['admin', 'editor
             siteId: targetSiteId,
             capacity: parseInt(capacity, 10) || 10,
             location: (location || '').trim(),
-            color: color || '#3498db'
+            color: color || '#3498db',
+            photo: photo || ''
         };
 
         const existing = await db('meeting_rooms').where({ id: roomId }).first();

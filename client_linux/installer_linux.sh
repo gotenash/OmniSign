@@ -73,6 +73,6 @@ echo ""
 read -p "Voulez-vous lancer le client d'affichage maintenant ? (O/N) : " START_NOW
 if [[ "$START_NOW" =~ ^[Oo]$ ]]; then
     cd "$SCRIPT_DIR"
-    node sync-engine.js &
+    ./start_sync.sh &
     ./start_player.sh
 fi

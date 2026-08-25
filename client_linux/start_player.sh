@@ -98,14 +98,10 @@ if [ -z "$CHROMIUM_BIN" ]; then
     exit 1
 fi
 
-# Détection et configuration pour Wayland (particulièrement sous Ubuntu/Debian moderne)
-EXTRA_FLAGS=""
-if [ -n "$WAYLAND_DISPLAY" ] || [ "$XDG_SESSION_TYPE" = "wayland" ]; then
-    # --disable-gpu est recommandé si l'écran reste blanc ou si l'accélération matérielle est inactive
-    EXTRA_FLAGS="--ozone-platform=wayland --enable-features=UseOzonePlatform --use-gl=egl --disable-gpu"
-else
-    EXTRA_FLAGS="--disable-gpu"
-fi
+# Configuration de la plateforme d'affichage (X11 ou Wayland automatique)
+# L'utilisation de --ozone-platform-hint=auto permet à Chromium de choisir dynamiquement la bonne plateforme
+# et d'éviter les crashs si la connexion à Wayland échoue au démarrage de la session.
+EXTRA_FLAGS="--ozone-platform-hint=auto --disable-gpu"
 
 # Lancement de Chrome/Chromium en mode Kiosk épuré et performant avec journalisation vers chromium.log
 $CHROMIUM_BIN \

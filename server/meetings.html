@@ -188,6 +188,19 @@
                 </div>
             </div>
 
+            <div style="margin-bottom: 15px;">
+                <label>Photo de la Salle (optionnelle)</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="file" id="r-photo-file" accept="image/*" onchange="uploadRoomPhoto()" style="display: none;">
+                    <button type="button" class="secondary" onclick="document.getElementById('r-photo-file').click()" style="padding: 8px 12px; font-size: 13px; white-space: nowrap;">Choisir une photo...</button>
+                    <input type="text" id="r-photo" placeholder="URL de la photo" readonly style="flex: 1; background: #2c3e50; border-color: #34495e;">
+                    <button type="button" class="danger" id="btn-clear-photo" onclick="clearRoomPhoto()" style="display: none; padding: 8px 12px; font-size: 13px;">Supprimer</button>
+                </div>
+                <div id="room-photo-preview-container" style="margin-top: 10px; display: none; text-align: center;">
+                    <img id="room-photo-preview" src="" style="max-width: 100%; max-height: 120px; border-radius: 6px; border: 1px solid #34495e;">
+                </div>
+            </div>
+
             <div style="display: flex; justify-content: space-between; gap: 10px;">
                 <button type="button" class="danger" id="btn-delete-room" onclick="deleteRoom()" style="display: none;">Supprimer</button>
                 <div style="display: flex; gap: 10px; margin-left: auto;">
@@ -437,7 +450,13 @@
 
             let html = '';
             rooms.forEach(r => {
+                const photoHtml = r.photo 
+                    ? `<div style="width: 100%; height: 100px; border-radius: 6px; overflow: hidden; margin-bottom: 12px; border: 1px solid #34495e;">
+                         <img src="${r.photo}" style="width: 100%; height: 100px; object-fit: cover;">
+                       </div>` 
+                    : '';
                 html += `<div style="background: #2c3e50; border-radius: 8px; padding: 18px; border-top: 4px solid ${r.color || '#3498db'}; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+                    ${photoHtml}
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
                         <h4 style="margin: 0; color: white; font-size: 16px;">${escapeHtml(r.name)}</h4>
                         <span style="background: rgba(255,255,255,0.1); padding: 3px 8px; border-radius: 4px; font-size: 11px;">👥 ${r.capacity} pers.</span>
@@ -542,6 +561,7 @@
 
         function openRoomModal(roomId = null) {
             document.getElementById('modal-room').style.display = 'flex';
+            document.getElementById('r-photo-file').value = '';
             if (roomId) {
                 const r = rooms.find(x => x.id === roomId);
                 if (!r) return;
@@ -551,6 +571,16 @@
                 document.getElementById('r-location').value = r.location || '';
                 document.getElementById('r-capacity').value = r.capacity || 10;
                 document.getElementById('r-color').value = r.color || '#3498db';
+                document.getElementById('r-photo').value = r.photo || '';
+                if (r.photo) {
+                    document.getElementById('room-photo-preview').src = r.photo;
+                    document.getElementById('room-photo-preview-container').style.display = 'block';
+                    document.getElementById('btn-clear-photo').style.display = 'block';
+                } else {
+                    document.getElementById('room-photo-preview').src = '';
+                    document.getElementById('room-photo-preview-container').style.display = 'none';
+                    document.getElementById('btn-clear-photo').style.display = 'none';
+                }
                 document.getElementById('btn-delete-room').style.display = 'block';
             } else {
                 document.getElementById('modal-room-title').innerText = 'Nouvelle Salle de Réunion';
@@ -559,8 +589,49 @@
                 document.getElementById('r-location').value = '';
                 document.getElementById('r-capacity').value = '10';
                 document.getElementById('r-color').value = '#3498db';
+                document.getElementById('r-photo').value = '';
+                document.getElementById('room-photo-preview').src = '';
+                document.getElementById('room-photo-preview-container').style.display = 'none';
+                document.getElementById('btn-clear-photo').style.display = 'none';
                 document.getElementById('btn-delete-room').style.display = 'none';
             }
+        }
+
+        async function uploadRoomPhoto() {
+            const fileInput = document.getElementById('r-photo-file');
+            if (fileInput.files.length === 0) return;
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/admin/meeting-rooms/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('r-photo').value = data.url;
+                    document.getElementById('room-photo-preview').src = data.url;
+                    document.getElementById('room-photo-preview-container').style.display = 'block';
+                    document.getElementById('btn-clear-photo').style.display = 'block';
+                } else {
+                    alert("Erreur lors du chargement de l'image : " + await res.text());
+                }
+            } catch (err) {
+                alert("Erreur de connexion : " + err.message);
+            }
+        }
+
+        function clearRoomPhoto() {
+            document.getElementById('r-photo-file').value = '';
+            document.getElementById('r-photo').value = '';
+            document.getElementById('room-photo-preview-container').style.display = 'none';
+            document.getElementById('room-photo-preview').src = '';
+            document.getElementById('btn-clear-photo').style.display = 'none';
         }
 
         async function saveRoom() {
@@ -569,6 +640,7 @@
             const location = document.getElementById('r-location').value.trim();
             const capacity = document.getElementById('r-capacity').value;
             const color = document.getElementById('r-color').value;
+            const photo = document.getElementById('r-photo').value;
 
             if (!name) return alert('Le nom de la salle est obligatoire.');
 
@@ -577,7 +649,7 @@
             const res = await fetch('/api/admin/meeting-rooms', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ id, name, location, capacity, color, siteId })
+                body: JSON.stringify({ id, name, location, capacity, color, siteId, photo })
             });
 
             if (res.ok) {
@@ -641,13 +713,17 @@
                                 html = '<div style="font-size: 24px; color: #94a3b8; text-align: center; margin-top: 100px;">Aucune réunion programmée aujourd'hui.</div>';
                             } else {
                                 d.meetings.forEach(m => {
-                                    const r = d.rooms.find(x => x.id === m.roomId) || { name: 'Salle', location: '' };
+                                    const r = d.rooms.find(x => x.id === m.roomId) || { name: 'Salle', location: '', color: '#38bdf8', photo: '' };
                                     const start = new Date(m.startTime).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
                                     const end = new Date(m.endTime).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+                                    const photoImg = r.photo ? '<img src="' + r.photo + '" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin-right: 20px;">' : '';
                                     html += \`<div class="card" style="border-left-color: \${r.color || '#38bdf8'};">
-                                        <div>
-                                            <div class="title">\${m.title}</div>
-                                            <div class="room">📍 \${r.name} \${r.location ? '(' + r.location + ')' : ''}</div>
+                                        <div style="display: flex; align-items: center;">
+                                            \${photoImg}
+                                            <div>
+                                                <div class="title">\${m.title}</div>
+                                                <div class="room">📍 \${r.name} \${r.location ? '(' + r.location + ')' : ''}</div>
+                                            </div>
                                         </div>
                                         <div style="text-align: right;">
                                             <div class="time">⏰ \${start} - \${end}</div>

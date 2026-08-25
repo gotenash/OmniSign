@@ -26,19 +26,33 @@ echo "📦 Installation des dépendances Node.js du client..."
 cd "$(dirname "$0")"
 NODE_OPTIONS="--dns-result-order=ipv4first" npm install socket.io-client axios fs-extra
 
-# Rendre le script de lancement exécutable
+# Rendre les scripts de lancement exécutables
 chmod +x start_player.sh
+chmod +x start_sync.sh
+
+# Convertir les fins de ligne CRLF (Windows) en LF (Linux) pour éviter les erreurs d'interpréteur
+sed -i 's/\r$//' start_player.sh 2>/dev/null
+sed -i 's/\r$//' start_sync.sh 2>/dev/null
+sed -i 's/\r$//' installer_linux.sh 2>/dev/null
 
 # 4. Configuration du lancement automatique (Autostart Bureau)
 echo "⚙️ Configuration du démarrage automatique de la session..."
 AUTOSTART_DIR="$HOME/.config/autostart"
 mkdir -p "$AUTOSTART_DIR"
 
+# Nettoyer les anciennes configurations pour éviter le lancement en double
+rm -f "$AUTOSTART_DIR/omnisign.desktop"
+rm -f "$AUTOSTART_DIR/omnisign-player.desktop"
+rm -f "$AUTOSTART_DIR/omnisign-sync.desktop"
+rm -f "$AUTOSTART_DIR/pidyn.desktop"
+rm -f "$AUTOSTART_DIR/pidyn-player.desktop"
+rm -f "$AUTOSTART_DIR/pidyn-sync.desktop"
+
 # Créer l'autostart pour le moteur de synchronisation OmniSign Sync
 cat <<EOF > "$AUTOSTART_DIR/omnisign-sync.desktop"
 [Desktop Entry]
 Type=Application
-Exec=node $(pwd)/sync-engine.js
+Exec=$(pwd)/start_sync.sh
 Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
@@ -62,5 +76,5 @@ echo "✅ Installation terminée avec succès !"
 echo "⚙️ Veuillez configurer le fichier $(pwd)/setup.txt avec les informations de votre serveur."
 echo "🔄 Au prochain démarrage de la session (ou redémarrage du PC), l'affichage dynamique démarrera automatiquement."
 echo "💡 Pour lancer manuellement le client maintenant, exécutez dans deux terminaux :"
-echo "   1) node $(pwd)/sync-engine.js"
+echo "   1) $(pwd)/start_sync.sh"
 echo "   2) $(pwd)/start_player.sh"

@@ -1045,6 +1045,32 @@
                         const allMeetings = (data && data.meetings) ? data.meetings : [];
                         const now = new Date();
 
+                        const resolveRoomPhoto = (photoPath) => {
+                            if (!photoPath) return '';
+                            const isLocal = window.location.protocol === 'file:' || 
+                                            window.location.hostname === 'localhost' || 
+                                            window.location.hostname === '127.0.0.1';
+                            if (isLocal) {
+                                if (window.location.protocol === 'file:') {
+                                    if (photoPath.startsWith('/img/rooms/')) {
+                                        return 'img/rooms/' + photoPath.substring('/img/rooms/'.length);
+                                    }
+                                    if (photoPath.startsWith('/')) {
+                                        return photoPath.substring(1);
+                                    }
+                                }
+                                return photoPath;
+                            } else {
+                                if (photoPath.startsWith('/')) {
+                                    return `${targetServerUrl}${photoPath}`;
+                                }
+                                return photoPath;
+                            }
+                        };
+
+                        console.log("[Player Meetings] Salles chargées :", data.rooms);
+                        console.log("[Player Meetings] Recherche de la salle :", roomName);
+
                         // Filtrer les réunions dont l'heure de fin est dépassée
                         const activeMeetings = allMeetings.filter(m => {
                             if (!m.endTime) return true;
@@ -1060,24 +1086,44 @@
                         // roomName is defined in the outer scope
 
                         if (activeMeetings.length === 0) {
+                            const room = (data.rooms || []).find(r => r.name === roomName || r.id === roomName) || { name: roomName };
+                            console.log("[Player Meetings] Salle trouvée (no meeting) :", room);
+                            const resolvedPhoto = resolveRoomPhoto(room.photo);
+                            console.log("[Player Meetings] Photo résolue (no meeting) :", resolvedPhoto);
                             if (customTpl && customTpl.customHtml) {
                                 let html = customTpl.customHtml;
-                                html = html.replace(/{{room}}/g, roomName)
+                                html = html.replace(/{{room}}/g, room.name)
                                            .replace(/{{subject}}/g, 'Aucune réunion à venir')
                                            .replace(/{{status}}/g, 'Disponible')
                                            .replace(/{{startTime}}/g, '')
-                                           .replace(/{{endTime}}/g, '');
+                                           .replace(/{{endTime}}/g, '')
+                                           .replace(/{{photo}}/g, resolvedPhoto);
                                 tpl.innerHTML = html;
                             } else {
                                 const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#ffffff';
                                 const titleSize = (customTpl && customTpl.titleFontSize) ? `${parseInt(customTpl.titleFontSize) * scaleRatio}px` : '8vw';
-                                tpl.innerHTML = `
-                                    <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">${roomName}</div>
-                                    <div style="font-size: 3vw; color: #2ecc71; margin-top: 3vh;">🟢 Aucune réunion à venir</div>`;
+                                if (resolvedPhoto) {
+                                    tpl.innerHTML = `
+                                        <div style="display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; gap: 40px; box-sizing: border-box; padding: 20px;">
+                                            <div style="flex: 1.2; height: 100%; display: flex; align-items: center; justify-content: center;">
+                                                <img src="${resolvedPhoto}" style="width: 100%; max-height: 80vh; object-fit: cover; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+                                            </div>
+                                            <div style="flex: 1; text-align: left; padding-left: 20px;">
+                                                <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize}; margin-bottom: 20px;">${room.name}</div>
+                                                <div style="font-size: 3vw; color: #2ecc71; margin-top: 3vh;">🟢 Disponible</div>
+                                                <div style="font-size: 2vw; color: #bdc3c7; margin-top: 2vh;">Aucune réunion à venir</div>
+                                            </div>
+                                        </div>`;
+                                } else {
+                                    tpl.innerHTML = `
+                                        <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">${room.name}</div>
+                                        <div style="font-size: 3vw; color: #2ecc71; margin-top: 3vh;">🟢 Aucune réunion à venir</div>`;
+                                }
                             }
                         } else {
                             const firstM = activeMeetings[0];
                             const room = (data.rooms || []).find(r => r.id === firstM.roomId) || { name: roomName };
+                            console.log("[Player Meetings] Salle trouvée (active meeting) :", room);
                             
                             let startIso = firstM.startTime;
                             let endIso = firstM.endTime;
@@ -1102,13 +1148,16 @@
                             const badgeBusy = (customTpl && customTpl.badgeBgBusy) ? customTpl.badgeBgBusy : '#e74c3c';
                             const bgBadge = isInProgress ? badgeBusy : badgeAvailable;
 
+                            const resolvedPhoto = resolveRoomPhoto(room.photo);
+                            console.log("[Player Meetings] Photo résolue (active meeting) :", resolvedPhoto);
                             if (customTpl && customTpl.customHtml) {
                                 let html = customTpl.customHtml;
                                 html = html.replace(/{{room}}/g, room.name)
                                            .replace(/{{subject}}/g, firstM.title || 'Réunion')
                                            .replace(/{{status}}/g, status)
                                            .replace(/{{startTime}}/g, startDisplay)
-                                           .replace(/{{endTime}}/g, endDisplay);
+                                           .replace(/{{endTime}}/g, endDisplay)
+                                           .replace(/{{photo}}/g, resolvedPhoto);
                                 tpl.innerHTML = html;
                             } else {
                                 const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#ffffff';
@@ -1117,11 +1166,26 @@
                                 const textSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize)}px` : '58px';
                                 const subTextSize = (customTpl && customTpl.textFontSize) ? `${parseInt(customTpl.textFontSize) * 0.7}px` : '38px';
 
-                                tpl.innerHTML = `
-                                    <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">${room.name}</div>
-                                    <div style="font-size:${textSize}; font-weight: bold; margin: 22px 0; color:${textColor};">${firstM.title || 'Réunion'}</div>
-                                    <div style="font-size:${subTextSize}; opacity: 0.8; margin-bottom: 43px; color:${textColor};">⏱️ ${startDisplay} - ${endDisplay}</div>
-                                    <div class="tpl-meeting-status" style="background:${bgBadge}; color:white; padding: 22px 96px; font-size: ${subTextSize}; border-radius: 30px; display: inline-block;">${status.toUpperCase()}</div>`;
+                                if (resolvedPhoto) {
+                                    tpl.innerHTML = `
+                                        <div style="display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; gap: 40px; box-sizing: border-box; padding: 20px;">
+                                            <div style="flex: 1.2; height: 100%; display: flex; align-items: center; justify-content: center;">
+                                                <img src="${resolvedPhoto}" style="width: 100%; max-height: 80vh; object-fit: cover; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+                                            </div>
+                                            <div style="flex: 1; text-align: left; padding-left: 20px;">
+                                                <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize}; margin-bottom: 20px;">${room.name}</div>
+                                                <div style="font-size:${textSize}; font-weight: bold; margin: 22px 0; color:${textColor};">${firstM.title || 'Réunion'}</div>
+                                                <div style="font-size:${subTextSize}; opacity: 0.8; margin-bottom: 43px; color:${textColor};">⏱️ ${startDisplay} - ${endDisplay}</div>
+                                                <div class="tpl-meeting-status" style="background:${bgBadge}; color:white; padding: 22px 96px; font-size: ${subTextSize}; border-radius: 30px; display: inline-block;">${status.toUpperCase()}</div>
+                                            </div>
+                                        </div>`;
+                                } else {
+                                    tpl.innerHTML = `
+                                        <div class="tpl-meeting-room" style="color:${titleColor}; font-size:${titleSize};">${room.name}</div>
+                                        <div style="font-size:${textSize}; font-weight: bold; margin: 22px 0; color:${textColor};">${firstM.title || 'Réunion'}</div>
+                                        <div style="font-size:${subTextSize}; opacity: 0.8; margin-bottom: 43px; color:${textColor};">⏱️ ${startDisplay} - ${endDisplay}</div>
+                                        <div class="tpl-meeting-status" style="background:${bgBadge}; color:white; padding: 22px 96px; font-size: ${subTextSize}; border-radius: 30px; display: inline-block;">${status.toUpperCase()}</div>`;
+                                }
                             }
                         }
                     };
