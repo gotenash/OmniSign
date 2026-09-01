@@ -382,9 +382,50 @@ async function syncPlaylist(playlistData) {
     } catch (e) {}
 
     try {
-        const meetingsRes = await axios.get(resolveMediaUrl(`/api/player/meetings/today?deviceId=${DEVICE_ID}`), { timeout: 5000 });
+        const meetingsRes = await axios.get(resolveMediaUrl(`/api/player/meetings/today?deviceId=${DEVICE_ID}&siteId=${localPlaylist.siteId || ''}`), { timeout: 5000 });
         if (meetingsRes.data && meetingsRes.data.meetings) {
             await fs.writeJson(path.join(APP_DIR, 'meetings.json'), meetingsRes.data, { spaces: 2 });
+
+            // Télécharger localement les photos des salles pour l'affichage hors-ligne
+            if (meetingsRes.data.rooms) {
+                const roomsImgDir = path.join(APP_DIR, 'img', 'rooms');
+                await fs.ensureDir(roomsImgDir);
+                
+                console.log(`[Sync Meetings] ${meetingsRes.data.rooms.length} salles trouvées dans la réponse.`);
+
+                for (const room of meetingsRes.data.rooms) {
+                    console.log(`[Sync Meetings] Salle: "${room.name}", Photo: "${room.photo || ''}"`);
+                    if (room.photo && (room.photo.startsWith('/img/rooms/') || room.photo.includes('/img/rooms/'))) {
+                        const cleanPhotoPath = room.photo.split('?')[0];
+                        const filename = path.basename(cleanPhotoPath);
+                        const localPhotoPath = path.join(roomsImgDir, filename);
+
+                        if (!(await fs.pathExists(localPhotoPath))) {
+                            try {
+                                const downloadUrl = resolveMediaUrl(cleanPhotoPath);
+                                console.log(`[Sync Meetings] Téléchargement de la photo pour ${room.name} depuis ${downloadUrl}...`);
+                                const response = await axios({
+                                    method: 'GET',
+                                    url: downloadUrl,
+                                    responseType: 'stream',
+                                    timeout: 10000
+                                });
+                                const writer = fs.createWriteStream(localPhotoPath);
+                                response.data.pipe(writer);
+                                await new Promise((resolve, reject) => {
+                                    writer.on('finish', resolve);
+                                    writer.on('error', reject);
+                                });
+                                console.log(`💾 Photo de la salle ${room.name} téléchargée localement sous ${filename}.`);
+                            } catch (downloadErr) {
+                                console.error(`❌ Échec du téléchargement de la photo de salle ${room.name} :`, downloadErr.message);
+                            }
+                        } else {
+                            console.log(`[Sync Meetings] La photo pour ${room.name} (${filename}) existe déjà localement.`);
+                        }
+                    }
+                }
+            }
         }
     } catch (e) {}
 
@@ -602,6 +643,7 @@ const mimeTypes = {
     '.js': 'text/javascript; charset=utf-8',
     '.json': 'application/json; charset=utf-8',
     '.png': 'image/png',
+    '.webp': 'image/webp',
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
     '.gif': 'image/gif',

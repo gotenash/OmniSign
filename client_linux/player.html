@@ -149,7 +149,7 @@
 
         /* Templates Styles */
         .tpl-container { 
-            width: 100%; height: 100%; color: white; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 100px; font-family: sans-serif; z-index: 5; 
+            width: 100%; height: 100%; color: white; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 40px 80px 80px 80px; font-family: sans-serif; z-index: 5; 
             box-sizing: border-box;
             will-change: transform;
             transform: translate3d(0,0,0);
@@ -872,7 +872,23 @@
                 
                 const playerScreen = document.getElementById('player-screen');
                 const playerWidth = playerScreen.clientWidth || window.innerWidth;
-                const scaleRatio = playerWidth / designWidth;
+                const playerHeight = playerScreen.clientHeight || window.innerHeight;
+
+                const overlay = document.getElementById('alert-overlay');
+                let alertsHeight = 0;
+                if (overlay && overlay.children.length > 0) {
+                    Array.from(overlay.children).forEach(child => {
+                        alertsHeight += child.offsetHeight || 0;
+                    });
+                    if (alertsHeight === 0) {
+                        alertsHeight = overlay.children.length * (window.innerWidth * 0.025 + 30);
+                    }
+                }
+                const availableHeight = playerHeight - alertsHeight;
+
+                const scaleX = playerWidth / designWidth;
+                const scaleY = availableHeight / designHeight;
+                const scaleRatio = Math.min(scaleX, scaleY);
                 
                 if (page.template !== 'video_fullscreen') {
                     tpl.style.width = designWidth + 'px';
@@ -880,7 +896,9 @@
                     tpl.style.transform = `scale(${scaleRatio})`;
                     tpl.style.transformOrigin = 'top left';
                     tpl.style.position = 'absolute';
-                    tpl.style.left = '0';
+                    const scaledWidth = designWidth * scaleRatio;
+                    const leftOffset = (playerWidth - scaledWidth) / 2;
+                    tpl.style.left = leftOffset + 'px';
                     tpl.style.top = '0';
                     tpl.style.boxSizing = 'border-box';
                 }
@@ -1071,8 +1089,18 @@
                         console.log("[Player Meetings] Salles chargées :", data.rooms);
                         console.log("[Player Meetings] Recherche de la salle :", roomName);
 
-                        // Filtrer les réunions dont l'heure de fin est dépassée
-                        const activeMeetings = allMeetings.filter(m => {
+                        const showAllRooms = !roomName || roomName === 'Toutes les Salles' || roomName === 'Toutes les salles';
+                        const targetRoom = showAllRooms 
+                            ? { name: 'Toutes les Salles', id: 'Toutes les Salles' } 
+                            : ((data.rooms || []).find(r => r.name === roomName || r.id === roomName) || { name: roomName, id: roomName });
+
+                        // Filtrer pour n'avoir que les réunions de cette salle
+                        const roomMeetings = showAllRooms 
+                            ? allMeetings 
+                            : allMeetings.filter(m => m.roomId === targetRoom.id || m.roomId === targetRoom.name);
+
+                        // Filtrer les réunions de la salle dont l'heure de fin est dépassée
+                        const activeMeetings = roomMeetings.filter(m => {
                             if (!m.endTime) return true;
                             let endIso = m.endTime;
                             if (!endIso.includes('T')) {
@@ -1084,7 +1112,7 @@
                         });
 
                         if (activeMeetings.length === 0) {
-                            const room = (data.rooms || []).find(r => r.name === roomName || r.id === roomName) || { name: roomName };
+                            const room = targetRoom;
                             console.log("[Player Meetings] Salle trouvée (no meeting) :", room);
                             const resolvedPhoto = resolveRoomPhoto(room.photo);
                             console.log("[Player Meetings] Photo résolue (no meeting) :", resolvedPhoto);
@@ -1120,7 +1148,9 @@
                             }
                         } else {
                             const firstM = activeMeetings[0];
-                            const room = (data.rooms || []).find(r => r.id === firstM.roomId) || { name: roomName };
+                            const room = showAllRooms 
+                                ? ((data.rooms || []).find(r => r.id === firstM.roomId || r.name === firstM.roomId) || { name: firstM.roomId || 'Salle de Réunion' })
+                                : targetRoom;
                             console.log("[Player Meetings] Salle trouvée (active meeting) :", room);
                             
                             let startIso = firstM.startTime;
@@ -1653,13 +1683,13 @@
             return 'ℹ️';
         }
 
-        function updateAlertOffset() {
+         function updateAlertOffset() {
             const overlay = document.getElementById('alert-overlay');
             const pageZones = document.getElementById('current-page-zones');
             if (!pageZones) return;
 
+            let totalHeight = 0;
             if (overlay && overlay.children.length > 0) {
-                let totalHeight = 0;
                 Array.from(overlay.children).forEach(child => {
                     totalHeight += child.offsetHeight || 0;
                 });
@@ -1671,6 +1701,26 @@
             } else {
                 pageZones.style.transform = 'translate3d(0, 0, 0)';
                 pageZones.style.height = '100%';
+            }
+
+            // Réajuster dynamiquement l'échelle du template actif pour éviter le débordement
+            const activeTpl = pageZones.querySelector('.tpl-container');
+            if (activeTpl && !activeTpl.querySelector('video')) {
+                const playerScreen = document.getElementById('player-screen');
+                const playerWidth = playerScreen.clientWidth || window.innerWidth;
+                const playerHeight = playerScreen.clientHeight || window.innerHeight;
+                
+                const designWidth = parseInt(activeTpl.style.width) || 1920;
+                const designHeight = parseInt(activeTpl.style.height) || 1080;
+                
+                const availableHeight = playerHeight - totalHeight;
+                const scaleX = playerWidth / designWidth;
+                const scaleY = availableHeight / designHeight;
+                const scaleRatio = Math.min(scaleX, scaleY);
+                
+                activeTpl.style.transform = `scale(${scaleRatio})`;
+                const scaledWidth = designWidth * scaleRatio;
+                activeTpl.style.left = ((playerWidth - scaledWidth) / 2) + 'px';
             }
         }
 

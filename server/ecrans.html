@@ -28,7 +28,6 @@
             background: #1a252f;
             border: 1px solid #34495e;
             border-radius: 8px;
-            overflow: hidden;
             display: flex;
             flex-direction: column;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
@@ -74,7 +73,7 @@
         .screenshot-img {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
             cursor: pointer;
         }
         .screenshot-placeholder {
@@ -162,6 +161,24 @@
             padding: 6px;
             margin: 0;
         }
+        .table-actions {
+            display: flex;
+            gap: 4px;
+            flex-wrap: nowrap;
+            align-items: center;
+            white-space: nowrap;
+        }
+        .table-actions button {
+            padding: 4px 6px;
+            font-size: 13px;
+            line-height: 1;
+            height: 26px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 26px;
+            margin: 0;
+        }
         .view-mode-toggle button {
             border: none;
             border-radius: 4px;
@@ -171,6 +188,123 @@
         }
         .view-mode-toggle button.active {
             background: #3498db !important;
+        }
+
+        /* Actions Dropdown Menu */
+        .actions-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-trigger {
+            padding: 4px 8px;
+            font-size: 13px;
+            height: 26px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #34495e;
+            border: 1px solid #5d6d7e;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            gap: 4px;
+        }
+        .dropdown-trigger:hover {
+            background: #4e6a85;
+        }
+        .dropdown-menu-content {
+            display: none;
+            position: absolute;
+            top: 30px;
+            background: #1a252f;
+            border: 1px solid #34495e;
+            border-radius: 6px;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.6);
+            z-index: 100;
+            min-width: 200px;
+        }
+        .table-actions .dropdown-menu-content {
+            right: 0;
+            left: auto;
+        }
+        .player-card-actions .dropdown-menu-content {
+            left: 0;
+            right: auto;
+        }
+        .dropdown-menu-content button {
+            width: 100%;
+            text-align: left;
+            padding: 8px 12px;
+            background: none;
+            border: none;
+            color: #ecf0f1;
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 10px;
+            box-sizing: border-box;
+        }
+        .dropdown-menu-content button:hover {
+            background: #3498db;
+            color: white;
+        }
+        .dropdown-menu-content button.danger-action {
+            color: #e74c3c;
+        }
+        .dropdown-menu-content button.danger-action:hover {
+            background: #e74c3c;
+            color: white;
+        }
+        .dropdown-divider {
+            height: 1px;
+            background: #34495e;
+            margin: 4px 0;
+        }
+        .show-dropdown {
+            display: block !important;
+        }
+        
+        /* Vertical Slider */
+        input[type=range].vertical-slider {
+            writing-mode: bt-lr;
+            -webkit-appearance: slider-vertical;
+            appearance: slider-vertical;
+            width: 12px;
+            height: 40px;
+            padding: 0;
+            background: transparent;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        /* Platform badges */
+        .platform-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .platform-windows {
+            background: rgba(52, 152, 219, 0.15);
+            color: #3498db;
+            border: 1px solid rgba(52, 152, 219, 0.3);
+        }
+        .platform-linux {
+            background: rgba(241, 196, 15, 0.15);
+            color: #f1c40f;
+            border: 1px solid rgba(241, 196, 15, 0.3);
+        }
+        .platform-pi {
+            background: rgba(231, 76, 60, 0.15);
+            color: #e74c3c;
+            border: 1px solid rgba(231, 76, 60, 0.3);
         }
     </style>
     <link rel="stylesheet" href="/assets/theme.css">
@@ -362,7 +496,7 @@
 
         async function load() {
             const res = await fetch('/api/admin/data', { headers: { 'Authorization': `Bearer ${token}` } });
-            const { players, playlists, sequences, groups } = await res.json();
+            const { players, playlists, sequences, groups, sites } = await res.json();
             
             window.playersData = players;
 
@@ -384,7 +518,8 @@
 
             let html = '';
             if (viewMode === 'table') {
-                html = '<table><tr><th>Nom</th><th>ID</th><th>Groupe</th><th>Statut</th><th>Diaporama</th><th>Santé (RAM/Disque/Temp)</th><th>WiFi</th><th>Volume</th><th>Dernière vue</th><th>Action</th></tr>';
+                const siteHeader = role === 'admin' ? '<th>Site</th>' : '';
+                html = `<table><tr><th>Afficheur (ID)</th><th>Client</th>${siteHeader}<th>Groupe</th><th>Statut</th><th>Diaporama</th><th>Santé (RAM/Disque/Temp)</th><th>WiFi</th><th>Volume</th><th>Dernière vue</th><th>Action</th></tr>`;
                 for (let id in players) {
                     const p = players[id];
                     if (!id || id === 'undefined' || id === 'null') continue;
@@ -403,9 +538,37 @@
                         healthText = `<span style="color:${ramColor}; font-weight:bold;">RAM: ${p.freeMem}/${p.totalMem}MB</span>${tempText}${diskText}`;
                     }
 
+                    let platformBadge = '<span class="platform-badge" style="background:rgba(189, 195, 199, 0.15); color:#bdc3c7; border:1px solid rgba(189, 195, 199, 0.3);">❓ Inconnu</span>';
+                    if (p.platform === 'Windows') {
+                        platformBadge = '<span class="platform-badge platform-windows">🪟 Windows</span>';
+                    } else if (p.platform === 'Linux') {
+                        platformBadge = '<span class="platform-badge platform-linux">🐧 Linux</span>';
+                    } else if (p.platform === 'Raspberry Pi' || p.platform === 'Pi') {
+                        platformBadge = '<span class="platform-badge platform-pi">🍓 Rasp. Pi</span>';
+                    }
+
+                    const siteCell = role === 'admin' 
+                        ? `<td>
+                            <select onchange="assignSite('${id}', this.value)" style="font-size: 11px; padding: 4px; background: #8e44ad; border: 1px solid #9b59b6; color: white; border-radius: 4px; cursor: pointer;">
+                                <option value="">🏫 Non assigné</option>
+                                ${sites.map(s => `<option value="${s.id}" ${p.siteId === s.id ? 'selected' : ''}>🏫 ${s.name}</option>`).join('')}
+                            </select>
+                           </td>`
+                        : '';
+
                     html += `<tr data-status="${isOnline ? 'online' : 'offline'}" data-approved-status="${p.status || 'approved'}" data-group-id="${p.groupId || ''}" ${p.status === 'pending' ? 'style="background: rgba(230, 126, 34, 0.08); border-left: 4px solid #e67e22;"' : ''}>
-                        <td><span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>${p.name}</td>
-                        <td style="font-family:monospace; font-size:11px;">${id}</td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
+                                <div>
+                                    <strong style="color: #ecf0f1; font-size: 13px;">${p.name}</strong>
+                                    <br>
+                                    <small style="color: #7f8c8d; font-family: monospace; font-size: 10px;">${id}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>${platformBadge}</td>
+                        ${siteCell}
                         <td>
                             <select onchange="assignGroup('${id}', this.value)">
                                 <option value="">Aucun</option>
@@ -434,27 +597,36 @@
                         <td style="font-size:11px;">${healthText}</td>
                         <td>${p.wifiSSID || 'Ethernet'}<br><small>${p.ip || ''}</small>${p.screenResolution ? `<br><small style="color:#3498db; font-weight:bold;">🖥️ ${p.screenResolution}</small>` : ''}</td>
                         <td>
-                            <div style="display: flex; align-items: center; gap: 8px; min-width: 120px;">
-                                <input type="range" min="0" max="100" value="${p.volume !== undefined ? p.volume : 100}" 
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; min-width: 45px;">
+                                <input type="range" class="vertical-slider" min="0" max="100" value="${p.volume !== undefined ? p.volume : 100}" 
                                        onchange="updateVolume('${id}', this.value)" 
-                                       oninput="this.nextElementSibling.innerText = this.value + '%'"
-                                       style="width: 80px; margin: 0; padding: 0; vertical-align: middle;">
-                                <span style="font-size: 11px; width: 32px; display: inline-block;">${p.volume !== undefined ? p.volume : 100}%</span>
+                                       oninput="this.nextElementSibling.innerText = this.value + '%'">
+                                <span style="font-size: 10px; font-weight: bold; color: #bdc3c7;">${p.volume !== undefined ? p.volume : 100}%</span>
                             </div>
                         </td>
                         <td style="font-size:11px;">${lastSeen}</td>
                         <td>
-                            ${p.status === 'pending' ? `<button onclick="approvePlayer('${id}')">Approuver</button>` : ''}
-                            <button class="secondary" title="Prendre une capture" onclick="takeScreenshot('${id}')">📸</button>
-                            <button class="secondary btn-table-fullscreen" title="Voir la capture en plein écran" onclick="openFullscreenScreenshot('${screenSrc}', '${p.name.replace(/'/g, "\\'")}')" ${screenSrc ? '' : 'disabled style="opacity: 0.5; cursor: not-allowed;"'}>🔍</button>
-                            <button class="secondary" title="Forcer Synchro" onclick="forceSync('${id}')">🔄</button>
-                            <button class="secondary" title="Vider Cache" onclick="clearCache('${id}')">🧹</button>
-                            <button class="secondary" title="Voir les logs" onclick="showLogsModal('${id}', '${p.name.replace(/'/g, "\\'")}')">📋</button>
-                            <button class="secondary" title="Allumer l'écran" onclick="toggleScreen('${id}', 'on')">💡</button>
-                            <button class="secondary" title="Éteindre l'écran (Veille)" onclick="toggleScreen('${id}', 'off')">🌙</button>
-                            <button class="secondary" title="Redémarrer le service" onclick="restartScreen('${id}')">⚙️</button>
-                            <button class="secondary" title="Redémarrer le système (Reboot)" onclick="rebootDevice('${id}')">🔌</button>
-                            <button class="danger" title="Supprimer" onclick="removePlayer('${id}')">🗑️</button>
+                            <div class="table-actions">
+                                ${p.status === 'pending' ? `<button onclick="approvePlayer('${id}')">Approuver</button>` : ''}
+                                <button class="secondary" title="Prendre une capture" onclick="takeScreenshot('${id}')">📸</button>
+                                <button class="secondary btn-table-fullscreen" title="Voir la capture en plein écran" onclick="openFullscreenScreenshot('${screenSrc}', '${p.name.replace(/'/g, "\\'")}')" ${screenSrc ? '' : 'disabled style="opacity: 0.5; cursor: not-allowed;"'}>🔍</button>
+                                <button class="secondary" title="Voir les logs" onclick="showLogsModal('${id}', '${p.name.replace(/'/g, "\\'")}')">📋</button>
+                                
+                                <div class="actions-dropdown">
+                                    <button class="dropdown-trigger" onclick="toggleDropdownMenu(event, '${id}')">⚙️ Actions ▾</button>
+                                    <div class="dropdown-menu-content" id="dropdown-${id}">
+                                        <button onclick="forceSync('${id}')">🔄 Forcer Synchro</button>
+                                        <button onclick="clearCache('${id}')">🧹 Vider Cache</button>
+                                        <div class="dropdown-divider"></div>
+                                        <button onclick="toggleScreen('${id}', 'on')">💡 Allumer l'écran</button>
+                                        <button onclick="toggleScreen('${id}', 'off')">🌙 Éteindre l'écran (Veille)</button>
+                                        <button onclick="restartScreen('${id}')">⚙️ Relancer le service</button>
+                                        <button onclick="rebootDevice('${id}')">🔌 Rebooter le système</button>
+                                        <div class="dropdown-divider"></div>
+                                        <button class="danger-action" onclick="removePlayer('${id}')">🗑️ Supprimer</button>
+                                    </div>
+                                </div>
+                            </div>
                         </td>
                     </tr>`;
                 }
@@ -470,6 +642,15 @@
                     const lastSeen = p.lastSeen ? new Date(p.lastSeen).toLocaleString() : 'Jamais';
                     
                     const screenSrc = p.latestScreenshot || '';
+
+                    let platformBadge = '<span class="platform-badge" style="background:rgba(189, 195, 199, 0.15); color:#bdc3c7; border:1px solid rgba(189, 195, 199, 0.3);">❓ Inconnu</span>';
+                    if (p.platform === 'Windows') {
+                        platformBadge = '<span class="platform-badge platform-windows">🪟 Windows</span>';
+                    } else if (p.platform === 'Linux') {
+                        platformBadge = '<span class="platform-badge platform-linux">🐧 Linux</span>';
+                    } else if (p.platform === 'Raspberry Pi' || p.platform === 'Pi') {
+                        platformBadge = '<span class="platform-badge platform-pi">🍓 Rasp. Pi</span>';
+                    }
 
                     let healthCardHtml = '';
                     if (p.totalMem && p.freeMem) {
@@ -510,14 +691,8 @@
                         <div class="player-card-header">
                             <div class="player-card-title">
                                 <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
-                                <span>${p.name}</span>
+                                <span style="font-weight: bold; color: #ecf0f1; font-size: 14px;">${p.name}</span>
                                 ${p.status === 'pending' ? '<span style="background:#e67e22; color:white; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold; margin-left:5px;">NEUF</span>' : ''}
-                            </div>
-                            <div class="player-card-group">
-                                <select onchange="assignGroup('${id}', this.value)" style="padding: 4px; font-size: 12px; background: #34495e;">
-                                    <option value="">Aucun groupe</option>
-                                    ${groups.map(g => `<option value="${g.id}" ${p.groupId === g.id ? 'selected' : ''}>${g.name}</option>`).join('')}
-                                </select>
                             </div>
                         </div>
                         <div class="player-card-body">
@@ -536,6 +711,29 @@
                             <div class="player-card-meta">
                                 <span class="label">ID :</span>
                                 <span style="font-family:monospace; font-size:10px;">${id}</span>
+                                
+                                <span class="label">Système :</span>
+                                <span>${platformBadge}</span>
+                                
+                                <span class="label">Site :</span>
+                                <span>
+                                    ${role === 'admin' ? `
+                                        <select onchange="assignSite('${id}', this.value)" style="width: 100%; padding: 4px; font-size: 11px; background: #8e44ad; border: 1px solid #9b59b6; color: white; border-radius: 4px; cursor: pointer; box-sizing: border-box; margin: 0;">
+                                            <option value="">🏫 Non assigné</option>
+                                            ${sites.map(s => `<option value="${s.id}" ${p.siteId === s.id ? 'selected' : ''}>🏫 ${s.name}</option>`).join('')}
+                                        </select>
+                                    ` : `
+                                        <span style="font-weight: bold; color: #ecf0f1;">🏫 ${(sites && sites.find(s => s.id === p.siteId)?.name) || p.siteId || 'Non assigné'}</span>
+                                    `}
+                                </span>
+                                
+                                <span class="label">Groupe :</span>
+                                <span>
+                                    <select onchange="assignGroup('${id}', this.value)" style="width: 100%; padding: 4px; font-size: 11px; background: #34495e; border: 1px solid #5d6d7e; color: white; border-radius: 4px; cursor: pointer; box-sizing: border-box; margin: 0;">
+                                        <option value="">Aucun groupe</option>
+                                        ${groups.map(g => `<option value="${g.id}" ${p.groupId === g.id ? 'selected' : ''}>${g.name}</option>`).join('')}
+                                    </select>
+                                </span>
                                 
                                 <span class="label">IP :</span>
                                 <span>${p.ip || 'Inconnue'}</span>
@@ -585,18 +783,26 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="player-card-actions" style="flex-wrap: wrap; justify-content: flex-start; gap: 6px;">
+                        <div class="player-card-actions" style="display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px;">
                             ${p.status === 'pending' ? `<button onclick="approvePlayer('${id}')" style="background:#2ecc71;">Approuver</button>` : ''}
                             <button class="secondary" title="Prendre une capture" onclick="takeScreenshot('${id}')">📸 Capture</button>
                             <button class="secondary btn-action-fullscreen" title="Voir la capture en plein écran" onclick="openFullscreenScreenshot('${screenSrc}', '${p.name.replace(/'/g, "\\'")}')" ${screenSrc ? '' : 'disabled style="opacity: 0.5; cursor: not-allowed;"'}>🔍 Plein écran</button>
-                            <button class="secondary" title="Forcer Synchro" onclick="forceSync('${id}')">🔄 Synchro</button>
-                            <button class="secondary" title="Vider Cache" onclick="clearCache('${id}')">🧹 Cache</button>
                             <button class="secondary" title="Voir les logs" onclick="showLogsModal('${id}', '${p.name.replace(/'/g, "\\'")}')">📋 Logs</button>
-                            <button class="secondary" title="Allumer l'écran" onclick="toggleScreen('${id}', 'on')" style="background:#27ae60;">💡 Allumer</button>
-                            <button class="secondary" title="Éteindre l'écran" onclick="toggleScreen('${id}', 'off')" style="background:#7f8c8d;">🌙 Veille</button>
-                            <button class="secondary" title="Redémarrer le service" onclick="restartScreen('${id}')" style="background:#d35400;">⚙️ Relancer</button>
-                            <button class="secondary" title="Redémarrer le système (Reboot)" onclick="rebootDevice('${id}')" style="background:#c0392b;">🔌 Reboot</button>
-                            <button class="danger" title="Supprimer" onclick="removePlayer('${id}')">🗑️</button>
+                            
+                            <div class="actions-dropdown">
+                                <button class="dropdown-trigger" onclick="toggleDropdownMenu(event, '${id}')">⚙️ Actions ▾</button>
+                                <div class="dropdown-menu-content" id="dropdown-${id}">
+                                    <button onclick="forceSync('${id}')">🔄 Forcer Synchro</button>
+                                    <button onclick="clearCache('${id}')">🧹 Vider Cache</button>
+                                    <div class="dropdown-divider"></div>
+                                    <button onclick="toggleScreen('${id}', 'on')">💡 Allumer l'écran</button>
+                                    <button onclick="toggleScreen('${id}', 'off')">🌙 Éteindre l'écran (Veille)</button>
+                                    <button onclick="restartScreen('${id}')">⚙️ Relancer le service</button>
+                                    <button onclick="rebootDevice('${id}')">🔌 Rebooter le système</button>
+                                    <div class="dropdown-divider"></div>
+                                    <button class="danger-action" onclick="removePlayer('${id}')">🗑️ Supprimer</button>
+                                </div>
+                            </div>
                         </div>
                     </div>`;
                 }
@@ -685,6 +891,14 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ deviceId, targetId })
+            });
+            load();
+        }
+        
+        async function assignSite(deviceId, siteId) {
+            await fetch(`/api/admin/players/${deviceId}/site`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ siteId: siteId || null })
             });
             load();
         }
@@ -830,6 +1044,26 @@
         function closeFullscreenScreenshot() {
             document.getElementById('screenshot-modal').style.display = 'none';
         }
+
+        function toggleDropdownMenu(event, id) {
+            event.stopPropagation();
+            document.querySelectorAll('.dropdown-menu-content').forEach(el => {
+                if (el.id !== `dropdown-${id}`) {
+                    el.classList.remove('show-dropdown');
+                }
+            });
+            const menu = document.getElementById(`dropdown-${id}`);
+            if (menu) {
+                menu.classList.toggle('show-dropdown');
+            }
+        }
+
+        // Fermer les menus lors d'un clic extérieur
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.dropdown-menu-content').forEach(el => {
+                el.classList.remove('show-dropdown');
+            });
+        });
 
         setupSocket();
         load();

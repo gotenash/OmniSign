@@ -63,7 +63,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding-top: 9vh;
+            padding: 4vh 6vw 6vh 6vw;
             font-family: sans-serif;
             box-sizing: border-box;
         }
@@ -374,13 +374,24 @@
 
                     if (page.data && page.data.useLiveMeeting) {
                         const sId = (playlistData && playlistData.siteId) ? playlistData.siteId : '';
-                        tplLayer.innerHTML = `<div style="font-size:28px; font-weight:bold; margin-bottom:10px;">${page.data.room || 'Toutes les Salles'}</div><div id="prev-meeting-content">Chargement des réunions...</div>`;
+                        const roomName = page.data.room || 'Toutes les Salles';
+                        tplLayer.innerHTML = `<div id="prev-meeting-content">Chargement des réunions...</div>`;
                         fetch(`/api/player/meetings/today?siteId=${encodeURIComponent(sId)}`)
                             .then(r => r.json())
                             .then(data => {
                                 const allMeetings = data.meetings || [];
                                 const now = new Date();
-                                const activeMeetings = allMeetings.filter(m => {
+                                
+                                const showAllRooms = !roomName || roomName === 'Toutes les Salles' || roomName === 'Toutes les salles';
+                                const targetRoom = showAllRooms 
+                                    ? { name: 'Toutes les Salles', id: 'Toutes les Salles' } 
+                                    : ((data.rooms || []).find(r => r.name === roomName || r.id === roomName) || { name: roomName, id: roomName });
+
+                                const roomMeetings = showAllRooms 
+                                    ? allMeetings 
+                                    : allMeetings.filter(m => m.roomId === targetRoom.id || m.roomId === targetRoom.name);
+
+                                const activeMeetings = roomMeetings.filter(m => {
                                     if (!m.endTime) return true;
                                     let endIso = m.endTime;
                                     if (!endIso.includes('T')) {
@@ -392,10 +403,12 @@
                                 });
                                 
                                 if (activeMeetings.length === 0) {
-                                    renderMeetingContent(page.data.room || 'Toutes les Salles', '🟢 Aucune réunion à venir', 'Disponible', '', '', true, []);
+                                    renderMeetingContent(targetRoom.name, '🟢 Aucune réunion à venir', 'Disponible', '', '', true, []);
                                 } else {
                                     const firstM = activeMeetings[0];
-                                    const room = (data.rooms || []).find(r => r.id === firstM.roomId) || { name: page.data.room || 'Salle' };
+                                    const room = showAllRooms 
+                                        ? ((data.rooms || []).find(r => r.id === firstM.roomId || r.name === firstM.roomId) || { name: firstM.roomId || 'Salle' })
+                                        : targetRoom;
                                     const start = firstM.startTime ? (firstM.startTime.includes('T') ? firstM.startTime.substring(11, 16) : firstM.startTime) : '';
                                     const end = firstM.endTime ? (firstM.endTime.includes('T') ? firstM.endTime.substring(11, 16) : firstM.endTime) : '';
                                     
@@ -413,14 +426,16 @@
                                     const badgeLabel = isInProgress ? 'EN COURS' : 'PROCHAINE RÉUNION';
                                     const statusText = isInProgress ? 'Occupée' : 'Disponible';
                                     
-                                    const mContent = `📍 ${room.name} : ${firstM.title} <br> ⏰ ${start} - ${end} • ${badgeLabel}`;
-                                    renderMeetingContent(page.data.room || 'Toutes les Salles', mContent, statusText, start, end, true, activeMeetings);
+                                    const mContent = `${firstM.title} <br> ⏰ ${start} - ${end} • ${badgeLabel}`;
+                                    renderMeetingContent(room.name, mContent, statusText, start, end, true, activeMeetings);
                                 }
                             }).catch(() => {
-                                renderMeetingContent(page.data.room || 'Toutes les Salles', 'Erreur de chargement', 'Inconnu', '', '', true, []);
+                                renderMeetingContent('Salle de Réunion', 'Erreur de chargement', 'Inconnu', '', '', true, []);
                             });
                     } else {
-                        renderMeetingContent(page.data.room || 'Salle de Réunion', page.data.subject || 'Sujet de la réunion', page.data.status || 'Disponible', '', '');
+                        // Résoudre le nom si disponible dans la configuration
+                        const displayName = (page.data && page.data.room === 'Toutes les Salles') ? 'Toutes les Salles' : (page.data.room || 'Salle de Réunion');
+                        renderMeetingContent(displayName, page.data.subject || 'Sujet de la réunion', page.data.status || 'Disponible', '', '');
                     }
                 } else if (page.template === 'video_fullscreen') {
                     if (page.data && page.data.videoUrl) {

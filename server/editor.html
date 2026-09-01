@@ -456,6 +456,31 @@
             padding: 12px !important;
             min-height: 120px;
         }
+        
+        /* Rendu Propre des Templates (Cantine & Réunions) avec proportionnalité */
+        .tpl-container { 
+            width: 100%; height: 100%; color: white; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 40px 80px 80px 80px; font-family: sans-serif; z-index: 5; 
+            box-sizing: border-box;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: top left;
+        }
+        .tpl-container video {
+            will-change: transform;
+            transform: translate3d(0,0,0);
+            backface-visibility: hidden;
+        }
+        .tpl-header { font-size: 96px; margin-bottom: 43px; border-bottom: 3px solid #3498db; padding-bottom: 10px; font-weight: bold; }
+        .tpl-content { display: flex; flex-direction: column; gap: 22px; width: 80%; }
+        .tpl-row { background: rgba(255,255,255,0.1); padding: 22px; border-radius: 15px; display: flex; align-items: center; }
+        .tpl-label { color: #3498db; font-size: 38px; width: 30%; text-align: left; font-weight: bold; }
+        .tpl-value { font-size: 58px; width: 70%; text-align: right; }
+        
+        .tpl-meeting-room { font-size: 154px; font-weight: bold; margin-bottom: 22px; }
+        .tpl-meeting-status { font-size: 38px; padding: 22px 96px; border-radius: 100px; margin-top: 43px; }
+        .status-disponible { background: #27ae60; }
+        .status-occupée { background: #e74c3c; }
     </style>
     <link rel="stylesheet" href="/assets/theme.css">
     <script src="/assets/theme.js"></script>
@@ -760,6 +785,7 @@
         let selectedIndex = -1;
         let selectedZoneIndex = -1; 
         let availableMedia = [];
+        let availableRooms = [];
         let activeCustomTemplates = {};
         
         let mode = 'none'; 
@@ -936,6 +962,13 @@
             const mediaRes = await fetch('/api/admin/media', { headers });
             availableMedia = await mediaRes.json();
             populateMediaSelects();
+
+            try {
+                const roomsRes = await fetch('/api/admin/meeting-rooms', { headers });
+                if (roomsRes.ok) availableRooms = await roomsRes.json();
+            } catch (err) {
+                console.error("Erreur lors du chargement des salles:", err);
+            }
 
             if (playlistId) {
                 const res = await fetch('/api/admin/data', { headers });
@@ -1562,7 +1595,7 @@
                 ],
                 meeting: [
                     { key: 'useLiveMeeting', label: 'Afficher les réunions du jour en direct (Auto)', type: 'checkbox' },
-                    { key: 'room', label: 'Nom de la salle', type: 'text' },
+                    { key: 'room', label: 'Nom de la salle', type: 'room_select' },
                     { key: 'subject', label: 'Sujet', type: 'text' },
                     { key: 'status', label: 'Statut', type: 'select', options: ['Disponible', 'Occupée'] }
                 ],
@@ -1586,6 +1619,9 @@
             if (!configs[item.template]) return;
 
             configs[item.template].forEach(field => {
+                if (item.template === 'meeting' && item.data.useLiveMeeting !== false && (field.key === 'subject' || field.key === 'status')) {
+                    return;
+                }
                 const label = document.createElement('label');
                 label.innerText = field.label;
                 label.style.display = 'block';
@@ -1601,6 +1637,15 @@
                         if ((item.data[field.key] || field.options[0]) === opt) o.selected = true;
                         input.add(o);
                     });
+                } else if (field.type === 'room_select') {
+                    input = document.createElement('select');
+                    let html = '<option value="Toutes les Salles">Toutes les Salles</option>';
+                    availableRooms.forEach(r => {
+                        const val = r.id;
+                        const name = r.name;
+                        html += `<option value="${val}" ${item.data[field.key] === val ? 'selected' : ''}>${name}</option>`;
+                    });
+                    input.innerHTML = html;
                 } else if (field.type === 'video_select') {
                     input = document.createElement('select');
                     const isObject = availableMedia.length > 0 && typeof availableMedia[0] === 'object';
@@ -1642,6 +1687,9 @@
                 
                 input.oninput = (e) => { 
                     item.data[field.key] = field.type === 'checkbox' ? e.target.checked : e.target.value; 
+                    if (field.key === 'useLiveMeeting') {
+                        renderTemplateFields(item);
+                    }
                     renderPreview(); 
                 };
                 container.appendChild(label);
@@ -1976,21 +2024,57 @@
             
             if (item && item.template) {
                 tplLayer.style.display = 'flex';
-                tplLayer.style.padding = item.template === 'video_fullscreen' ? '0' : '70px 20px 20px 20px';
+                tplLayer.style.padding = '0';
+
+                // Calculer les dimensions de design basées sur la résolution
+                const res = playlistData.resolution || '16/9';
+                const ratio = res.split('/');
+                const wRatio = parseInt(ratio[0]) || 16;
+                const hRatio = parseInt(ratio[1]) || 9;
+                
+                let designWidth = 1920;
+                let designHeight = 1080;
+                if (wRatio < hRatio) {
+                    designWidth = 1080;
+                    designHeight = 1920;
+                } else if (wRatio === hRatio) {
+                    designWidth = 1080;
+                    designHeight = 1080;
+                }
+
+                const mockupWidth = parseFloat(screen.style.width) || screen.offsetWidth || 800;
+                const scaleRatio = mockupWidth / designWidth;
+
+                // Créer le wrapper tpl-container avec mise à l'échelle
+                const wrapper = document.createElement('div');
+                wrapper.className = 'tpl-container';
+                wrapper.style.width = designWidth + 'px';
+                wrapper.style.height = designHeight + 'px';
+                wrapper.style.position = 'absolute';
+                wrapper.style.top = '0';
+                wrapper.style.left = '0';
+                wrapper.style.transform = `scale(${scaleRatio})`;
+                wrapper.style.transformOrigin = 'top left';
+                wrapper.style.boxSizing = 'border-box';
+
+                let targetLayer = wrapper;
+                if (item.template === 'video_fullscreen') {
+                    targetLayer = tplLayer;
+                }
 
                 // Appliquer les styles généraux du template personnalisé
                 const customTpl = activeCustomTemplates[item.template];
                 if (customTpl) {
-                    if (customTpl.backgroundColor) tplLayer.style.backgroundColor = customTpl.backgroundColor;
+                    if (customTpl.backgroundColor) targetLayer.style.backgroundColor = customTpl.backgroundColor;
                     if (customTpl.backgroundUrl) {
-                        tplLayer.style.backgroundImage = `url("${customTpl.backgroundUrl}?token=${token}")`;
-                        tplLayer.style.backgroundSize = 'cover';
-                        tplLayer.style.backgroundPosition = 'center';
+                        targetLayer.style.backgroundImage = `url("${customTpl.backgroundUrl}?token=${token}")`;
+                        targetLayer.style.backgroundSize = 'cover';
+                        targetLayer.style.backgroundPosition = 'center';
                     } else {
-                        tplLayer.style.backgroundImage = 'none';
+                        targetLayer.style.backgroundImage = 'none';
                     }
                     if (customTpl.fontFamily) {
-                        tplLayer.style.fontFamily = customTpl.fontFamily.startsWith('font-') ? `"${customTpl.fontFamily}", sans-serif` : customTpl.fontFamily;
+                        targetLayer.style.fontFamily = customTpl.fontFamily.startsWith('font-') ? `"${customTpl.fontFamily}", sans-serif` : customTpl.fontFamily;
                         // Injecter la police personnalisée si elle provient de la médiathèque
                         if (customTpl.fontFamily.startsWith('font-')) {
                             const fontId = customTpl.fontFamily.replace('font-', '');
@@ -2004,18 +2088,18 @@
                         }
                     }
                     if (customTpl.borderStyle && customTpl.borderStyle !== 'none') {
-                        tplLayer.style.border = `${customTpl.borderWidth || 0}px ${customTpl.borderStyle} ${customTpl.borderColor || 'transparent'}`;
+                        targetLayer.style.border = `${customTpl.borderWidth || 0}px ${customTpl.borderStyle} ${customTpl.borderColor || 'transparent'}`;
                     } else {
-                        tplLayer.style.border = 'none';
+                        targetLayer.style.border = 'none';
                     }
-                    if (customTpl.borderRadius) tplLayer.style.borderRadius = `${customTpl.borderRadius}px`;
-                    else tplLayer.style.borderRadius = '0';
+                    if (customTpl.borderRadius) targetLayer.style.borderRadius = `${customTpl.borderRadius}px`;
+                    else targetLayer.style.borderRadius = '0';
                 } else {
-                    tplLayer.style.backgroundColor = 'transparent';
-                    tplLayer.style.backgroundImage = 'none';
-                    tplLayer.style.fontFamily = 'sans-serif';
-                    tplLayer.style.border = 'none';
-                    tplLayer.style.borderRadius = '0';
+                    targetLayer.style.backgroundColor = 'transparent';
+                    targetLayer.style.backgroundImage = 'none';
+                    targetLayer.style.fontFamily = 'sans-serif';
+                    targetLayer.style.border = 'none';
+                    targetLayer.style.borderRadius = '0';
                 }
 
                 // Surcharger avec le CSS personnalisé
@@ -2045,7 +2129,7 @@
                                        .replace(/{{main}}/g, item.data.main || 'Non renseigné')
                                        .replace(/{{dessert}}/g, item.data.dessert || 'Non renseigné');
                         }
-                        tplLayer.innerHTML = html;
+                        targetLayer.innerHTML = html;
                     } else {
                         const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#3498db';
                         const titleSize = (customTpl && customTpl.titleFontSize) ? `${customTpl.titleFontSize}px` : '24px';
@@ -2054,14 +2138,14 @@
 
                         const isLive = item.data.useLiveMenu !== false;
                         if (isLive) {
-                            tplLayer.innerHTML = `
+                            targetLayer.innerHTML = `
                                 <div style="color:${titleColor}; font-weight:bold; font-size:${titleSize}; border-bottom:2px solid ${titleColor}; margin-bottom:15px; padding-bottom:5px;">${item.data.title || 'MENU CANTINE'} (En direct)</div>
                                 <div style="font-size:${textSize}; color:${textColor};">
                                     <p style="color:#2ecc71; font-weight:bold;">🟢 Menu de la semaine (Mise à jour automatique)</p>
                                     <p><i>Le menu du jour s'affichera automatiquement sur l'écran.</i></p>
                                 </div>`;
                         } else {
-                            tplLayer.innerHTML = `
+                            targetLayer.innerHTML = `
                                 <div style="color:${titleColor}; font-weight:bold; font-size:${titleSize}; border-bottom:2px solid ${titleColor}; margin-bottom:15px; padding-bottom:5px;">${item.data.title || 'MENU CANTINE'}</div>
                                 <div style="font-size:${textSize}; color:${textColor};">
                                     <p><b>Entrée:</b> ${item.data.starter || 'Non renseignée'}</p>
@@ -2071,23 +2155,29 @@
                         }
                     }
                 } else if (item.template === 'meeting') {
+                    let roomDisplayName = 'Toutes les Salles';
+                    if (item.data.room && item.data.room !== 'Toutes les Salles') {
+                        const rObj = availableRooms.find(r => r.id === item.data.room || r.name === item.data.room);
+                        roomDisplayName = rObj ? rObj.name : item.data.room;
+                    }
+
                     if (customTpl && customTpl.customHtml) {
                         let html = customTpl.customHtml;
                         const isLive = item.data.useLiveMeeting !== false;
                         if (isLive) {
-                            html = html.replace(/{{room}}/g, item.data.room || 'Toutes les Salles')
+                            html = html.replace(/{{room}}/g, roomDisplayName)
                                        .replace(/{{subject}}/g, '📅 Planning des Réunions du Jour (En direct)')
                                        .replace(/{{status}}/g, '🟢 Live Agenda Sync')
                                        .replace(/{{startTime}}/g, '')
                                        .replace(/{{endTime}}/g, '');
                         } else {
-                            html = html.replace(/{{room}}/g, item.data.room || 'Salle de Réunion')
+                            html = html.replace(/{{room}}/g, roomDisplayName)
                                        .replace(/{{subject}}/g, item.data.subject || 'Sujet de la réunion')
                                        .replace(/{{status}}/g, item.data.status || 'Disponible')
                                        .replace(/{{startTime}}/g, '')
                                        .replace(/{{endTime}}/g, '');
                         }
-                        tplLayer.innerHTML = html;
+                        targetLayer.innerHTML = html;
                     } else {
                         const titleColor = (customTpl && customTpl.titleColor) ? customTpl.titleColor : '#ffffff';
                         const titleSize = (customTpl && customTpl.titleFontSize) ? `${customTpl.titleFontSize}px` : '28px';
@@ -2098,15 +2188,15 @@
 
                         const isLive = item.data.useLiveMeeting !== false;
                         if (isLive) {
-                            tplLayer.innerHTML = `
-                                <div style="font-size:${titleSize}; font-weight:bold; margin-bottom:10px; color:${titleColor}">${item.data.room || 'Toutes les Salles'}</div>
+                            targetLayer.innerHTML = `
+                                <div style="font-size:${titleSize}; font-weight:bold; margin-bottom:10px; color:${titleColor}">${roomDisplayName}</div>
                                 <div style="color:${textColor}; font-size:${textSize}; margin-bottom:20px;">📅 Planning des Réunions du Jour (En direct)</div>
                                 <div style="display:inline-block; padding:8px 25px; border-radius:20px; background:#27ae60; color:white; font-weight:bold;">🟢 Live Agenda Sync</div>`;
                         } else {
                             const status = item.data.status || 'Disponible';
                             const bgBadge = status === 'Disponible' ? badgeAvailable : badgeBusy;
-                            tplLayer.innerHTML = `
-                                <div style="font-size:${titleSize}; font-weight:bold; margin-bottom:10px; color:${titleColor}">${item.data.room || 'Salle de Réunion'}</div>
+                            targetLayer.innerHTML = `
+                                <div style="font-size:${titleSize}; font-weight:bold; margin-bottom:10px; color:${titleColor}">${roomDisplayName}</div>
                                 <div style="color:${textColor}; font-size:${textSize}; margin-bottom:20px;">${item.data.subject || 'Sujet de la réunion'}</div>
                                 <div style="display:inline-block; padding:8px 25px; border-radius:20px; background:${bgBadge}; color:white; font-weight:bold;">${status}</div>`;
                         }
@@ -2126,16 +2216,16 @@
                         `;
                         html += `<div style="${legendStyle}">${item.data.legend}</div>`;
                     }
-                    tplLayer.innerHTML = html;
-                    const v = tplLayer.querySelector('video');
+                    targetLayer.innerHTML = html;
+                    const v = targetLayer.querySelector('video');
                     if (v && item.data.videoUrl) {
                         v.play().then(() => {
                             if (!isMuted) v.muted = false;
                         }).catch(e => console.warn("Lancement aperçu vidéo échoué:", e));
                     }
-                    tplLayer.style.padding = '0';
-                    tplLayer.style.justifyContent = 'center'; 
-                    tplLayer.style.alignItems = 'center'; 
+                    targetLayer.style.padding = '0';
+                    targetLayer.style.justifyContent = 'center'; 
+                    targetLayer.style.alignItems = 'center'; 
                 } else if (item.template === 'weather') {
                     const city = item.data.city || 'Paris';
                     const lat = item.data.lat || '48.8566';
@@ -2144,11 +2234,11 @@
                     
                     if (weatherCache[cacheKey]) {
                         if (weatherCache[cacheKey] === 'loading') {
-                            tplLayer.innerHTML = `
+                            targetLayer.innerHTML = `
                                 <div style="color:#3498db; font-weight:bold; font-size:24px; margin-bottom:15px;">MÉTÉO - ${city.toUpperCase()}</div>
                                 <div style="color:#bdc3c7;">Chargement des prévisions...</div>`;
                         } else if (weatherCache[cacheKey] === 'error') {
-                            tplLayer.innerHTML = `
+                            targetLayer.innerHTML = `
                                 <div style="color:#3498db; font-weight:bold; font-size:24px; margin-bottom:15px;">MÉTÉO - ${city.toUpperCase()}</div>
                                 <div style="color:#e74c3c; font-weight:bold;">Météo indisponible</div>`;
                         } else {
@@ -2173,11 +2263,11 @@
                                     </div>`;
                             });
                             html += `</div>`;
-                            tplLayer.innerHTML = html;
+                            targetLayer.innerHTML = html;
                         }
                     } else {
                         weatherCache[cacheKey] = 'loading';
-                        tplLayer.innerHTML = `
+                        targetLayer.innerHTML = `
                             <div style="color:#3498db; font-weight:bold; font-size:24px; margin-bottom:15px;">MÉTÉO - ${city.toUpperCase()}</div>
                             <div style="color:#bdc3c7;">Chargement des prévisions...</div>`;
                         
@@ -2193,6 +2283,10 @@
                                 renderPreview();
                             });
                     }
+                }
+
+                if (item.template !== 'video_fullscreen') {
+                    tplLayer.appendChild(wrapper);
                 }
             }
             

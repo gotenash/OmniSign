@@ -42,7 +42,7 @@ echo ""
 read -p "Entrez la cle API de l'ecran (generee sur le serveur) : " API_KEY
 API_KEY=${API_KEY:-"ma_cle_secrete_123"}
 
-DEFAULT_DEV_ID="pi-$(hostname)"
+DEFAULT_DEV_ID="client-$(hostname)"
 echo ""
 read -p "Entrez l'identifiant de cet ecran (defaut: ${DEFAULT_DEV_ID}) : " DEVICE_ID
 DEVICE_ID=${DEVICE_ID:-$DEFAULT_DEV_ID}

@@ -59,10 +59,10 @@ sleep 0.1
 unclutter -idle 0.5 -root >/dev/null 2>&1 &
 
 # Nettoyage préventif du verrou de session Chromium
-if [ -d /home/pi/chrome_profile ]; then
-    find /home/pi/chrome_profile -name 'SingletonLock' -delete
-    rm -rf /home/pi/chrome_profile/Default/Cache 2>/dev/null
-    rm -rf /home/pi/chrome_profile/Default/Code\ Cache 2>/dev/null
+if [ -d "$HOME/chrome_profile" ]; then
+    find "$HOME/chrome_profile" -name 'SingletonLock' -delete
+    rm -rf "$HOME/chrome_profile/Default/Cache" 2>/dev/null
+    rm -rf "$HOME/chrome_profile/Default/Code\ Cache" 2>/dev/null
 fi
 
 # Temporisation active : on attend que le serveur Node.js local réponde sur le port 8080
@@ -97,7 +97,7 @@ $CHROMIUM_BIN \
   --autoplay-policy=no-user-gesture-required \
   --password-store=basic \
   --use-mock-keychain \
-  --user-data-dir='/home/pi/chrome_profile' \
+  --user-data-dir="$HOME/chrome_profile" \
   --noerrdialogs \
   --disable-infobars \
   --no-first-run \
@@ -106,4 +106,4 @@ $CHROMIUM_BIN \
   --disable-dev-shm-usage \
   --js-flags='--max-old-space-size=512' \
   --enable-logging=stderr --v=1 \
-  'http://127.0.0.1:8080/player' > /home/pi/omnisign/chromium.log 2>&1
+  'http://127.0.0.1:8080/player' > "$(dirname "$0")/chromium.log" 2>&1

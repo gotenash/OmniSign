@@ -295,6 +295,15 @@ async function initializeDatabase() {
             });
             console.log('Colonne "screenResolution" ajoutée à la table "players".');
         }
+
+        // Migration : Ajout de la colonne platform si elle n'existe pas
+        const hasPlatform = await db.schema.hasColumn('players', 'platform');
+        if (!hasPlatform) {
+            await db.schema.table('players', (table) => {
+                table.string('platform');
+            });
+            console.log('Colonne "platform" ajoutée à la table "players".');
+        }
     });
 
     await db.schema.hasTable('schedules').then(async (exists) => {
@@ -1668,6 +1677,11 @@ const getFileType = (mimetype, filename) => {
     return 'other';
 };
 
+// Route de ping pour la vérification de l'authentification et de la connectivité (heartbeat)
+app.get('/api/admin/ping', authMiddleware, (req, res) => {
+    res.json({ pong: true, username: req.user.username, role: req.user.role });
+});
+
 // Route de login
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
@@ -1740,14 +1754,16 @@ app.get('/api/admin/data', authMiddleware, checkRole(['admin', 'editor', 'author
     const playlistsQuery = filterBySiteId(db('playlists').select('*'), req.user);
     const sequencesQuery = filterBySiteId(db('sequences').select('*'), req.user);
     const groupsQuery = filterBySiteId(db('groups').select('*'), req.user);
+    const sitesQuery = db('sites').select('*');
 
     Promise.all([
         playersQuery,
         playlistsQuery.then(rows => rows.reduce((acc, p) => ({ ...acc, [p.id]: { ...p, items: JSON.parse(p.items) } }), {})),
         sequencesQuery.then(rows => rows.reduce((acc, s) => ({ ...acc, [s.id]: { ...s, playlistIds: JSON.parse(s.playlistIds) } }), {})),
         db('settings').select('*'),
-        groupsQuery
-    ]).then(([players, playlists, sequences, settings, groups]) => {
+        groupsQuery,
+        sitesQuery
+    ]).then(([players, playlists, sequences, settings, groups, sites]) => {
         const formattedPlayers = players
             .filter(p => p.id && p.id !== 'undefined' && p.id !== 'null')
             .reduce((acc, p) => ({ ...acc, [p.id]: { ...p, downloadStatus: JSON.parse(p.downloadStatus || '{}') } }), {});
@@ -1758,7 +1774,8 @@ app.get('/api/admin/data', authMiddleware, checkRole(['admin', 'editor', 'author
             playlists,
             sequences,
             settings: formattedSettings,
-            groups
+            groups,
+            sites
         };
 
         if (req.user.role === 'admin') {
@@ -2025,6 +2042,14 @@ app.post('/api/admin/players/:deviceId/group', authMiddleware, checkRole(['admin
     const { deviceId } = req.params;
     const { groupId } = req.body;
     db('players').where({ id: deviceId }).update({ groupId })
+        .then(() => res.json({ success: true }))
+        .catch(err => res.status(500).send(err.message));
+});
+
+app.post('/api/admin/players/:deviceId/site', authMiddleware, checkRole(['admin']), (req, res) => {
+    const { deviceId } = req.params;
+    const { siteId } = req.body;
+    db('players').where({ id: deviceId }).update({ siteId: siteId || null })
         .then(() => res.json({ success: true }))
         .catch(err => res.status(500).send(err.message));
 });
@@ -3832,7 +3857,8 @@ app.post('/api/admin/system/demo-data/generate', authMiddleware, checkRole(['adm
                 users: [
                     { username: 'chef.stexupery', role: 'cook', email: 'chef.stexupery@kikoo.ovh' },
                     { username: 'secretaire.stexupery', role: 'secretary', email: 'secretaire.stexupery@kikoo.ovh' },
-                    { username: 'auteur.stexupery', role: 'author', email: 'auteur.stexupery@kikoo.ovh' }
+                    { username: 'auteur.stexupery', role: 'author', email: 'auteur.stexupery@kikoo.ovh' },
+                    { username: 'editeur.stexupery', role: 'editor', email: 'editeur.stexupery@kikoo.ovh' }
                 ],
                 rooms: [
                     { id: 'demo_room_stex_1', name: 'Salle Le Petit Prince', capacity: 15, location: '1er Étage - Aile Ouest', color: '#3498db' },
@@ -3864,7 +3890,9 @@ app.post('/api/admin/system/demo-data/generate', authMiddleware, checkRole(['adm
                 users: [
                     { username: 'chef.curie', role: 'cook', email: 'chef.curie@kikoo.ovh' },
                     { username: 'secretaire.curie', role: 'secretary', email: 'secretaire.curie@kikoo.ovh' },
-                    { username: 'prof.curie', role: 'author', email: 'prof.curie@kikoo.ovh' }
+                    { username: 'prof.curie', role: 'author', email: 'prof.curie@kikoo.ovh' },
+                    { username: 'auteur.curie', role: 'author', email: 'auteur.curie@kikoo.ovh' },
+                    { username: 'editeur.curie', role: 'editor', email: 'editeur.curie@kikoo.ovh' }
                 ],
                 rooms: [
                     { id: 'demo_room_curie_1', name: 'Laboratoire Radium', capacity: 12, location: '2ème Étage - Bâtiment Sciences', color: '#2ecc71' },
@@ -3895,7 +3923,9 @@ app.post('/api/admin/system/demo-data/generate', authMiddleware, checkRole(['adm
                 desc: 'Établissement international et découvertes',
                 users: [
                     { username: 'chef.jverne', role: 'cook', email: 'chef.jverne@kikoo.ovh' },
-                    { username: 'secretaire.jverne', role: 'secretary', email: 'secretaire.jverne@kikoo.ovh' }
+                    { username: 'secretaire.jverne', role: 'secretary', email: 'secretaire.jverne@kikoo.ovh' },
+                    { username: 'auteur.jverne', role: 'author', email: 'auteur.jverne@kikoo.ovh' },
+                    { username: 'editeur.jverne', role: 'editor', email: 'editeur.jverne@kikoo.ovh' }
                 ],
                 rooms: [
                     { id: 'demo_room_jverne_1', name: 'Salle Nautilus', capacity: 18, location: 'RDC Aile Océan', color: '#1abc9c' },
@@ -3925,7 +3955,9 @@ app.post('/api/admin/system/demo-data/generate', authMiddleware, checkRole(['adm
                 desc: 'Établissement engagé & Citoyenneté',
                 users: [
                     { username: 'chef.jmoulin', role: 'cook', email: 'chef.jmoulin@kikoo.ovh' },
-                    { username: 'secretaire.jmoulin', role: 'secretary', email: 'secretaire.jmoulin@kikoo.ovh' }
+                    { username: 'secretaire.jmoulin', role: 'secretary', email: 'secretaire.jmoulin@kikoo.ovh' },
+                    { username: 'auteur.jmoulin', role: 'author', email: 'auteur.jmoulin@kikoo.ovh' },
+                    { username: 'editeur.jmoulin', role: 'editor', email: 'editeur.jmoulin@kikoo.ovh' }
                 ],
                 rooms: [
                     { id: 'demo_room_jmoulin_1', name: 'Salle Résistance', capacity: 16, location: '1er Étage Bâtiment Historique', color: '#34495e' },
@@ -3955,7 +3987,9 @@ app.post('/api/admin/system/demo-data/generate', authMiddleware, checkRole(['adm
                 desc: 'Établissement des Arts, Culture et Poésie',
                 users: [
                     { username: 'chef.peluard', role: 'cook', email: 'chef.peluard@kikoo.ovh' },
-                    { username: 'secretaire.peluard', role: 'secretary', email: 'secretaire.peluard@kikoo.ovh' }
+                    { username: 'secretaire.peluard', role: 'secretary', email: 'secretaire.peluard@kikoo.ovh' },
+                    { username: 'auteur.peluard', role: 'author', email: 'auteur.peluard@kikoo.ovh' },
+                    { username: 'editeur.peluard', role: 'editor', email: 'editeur.peluard@kikoo.ovh' }
                 ],
                 rooms: [
                     { id: 'demo_room_peluard_1', name: 'Salle Liberté', capacity: 14, location: '1er Étage - Aile Arts', color: '#d35400' },
@@ -4093,6 +4127,10 @@ app.post('/api/admin/system/demo-data/generate', authMiddleware, checkRole(['adm
             }).onConflict('id').merge();
 
             const playerId = `demo_screen_${col.id}`;
+            const colIndex = demoColleges.indexOf(col);
+            const platforms = ['Raspberry Pi', 'Windows', 'Linux', 'Raspberry Pi', 'Windows'];
+            const platform = platforms[colIndex % platforms.length];
+            
             await db('players').insert({
                 id: playerId,
                 name: `Écran Accueil (${col.name})`,
@@ -4100,7 +4138,8 @@ app.post('/api/admin/system/demo-data/generate', authMiddleware, checkRole(['adm
                 siteId: col.id,
                 manualPlaylistId: playlistId,
                 lastSeen: new Date(),
-                downloadStatus: '{}'
+                downloadStatus: '{}',
+                platform: platform
             }).onConflict('id').merge();
         }
 
@@ -4678,6 +4717,7 @@ io.on('connection', async (socket) => {
             if (info.diskFree !== undefined) updateData.diskFree = info.diskFree;
             if (info.cpuTemp !== undefined) updateData.cpuTemp = info.cpuTemp;
             if (info.screenResolution !== undefined) updateData.screenResolution = info.screenResolution;
+            if (info.platform !== undefined) updateData.platform = info.platform;
 
             // Mettre à jour le nom par défaut si le nom contient la valeur initiale générique "Nouveau Pi" / "Nouveau Client"
             if (player && (player.name.startsWith('Nouveau Pi') || player.name.startsWith('Nouveau Client') || player.name.startsWith('Nouveau PC')) && info.platform) {

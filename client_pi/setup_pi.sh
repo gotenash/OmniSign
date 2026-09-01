@@ -7,8 +7,19 @@ BOOT_DIR="/boot"
 # Fichier de configuration à lire
 SETUP_FILE="$BOOT_DIR/setup.txt"
 
-# Dossier d'installation de l'application PiDyn
-INSTALL_DIR="/home/pi/omnisign"
+# Détecter l'utilisateur non-root qui exécute le script (ou l'utilisateur d'origine si lancé avec sudo)
+SUDO_USER_DETECTED=${SUDO_USER:-$(whoami)}
+if [ "$SUDO_USER_DETECTED" = "root" ]; then
+    SUDO_USER_DETECTED=$(logname 2>/dev/null || echo $USER)
+    if [ "$SUDO_USER_DETECTED" = "root" ]; then
+        SUDO_USER_DETECTED=$(awk -F: '$3 >= 1000 && $3 != 65534 {print $1; exit}' /etc/passwd)
+    fi
+fi
+SUDO_USER_DETECTED=${SUDO_USER_DETECTED:-"pi"}
+
+# Obtenir le home directory de cet utilisateur
+USER_HOME=$(eval echo "~$SUDO_USER_DETECTED")
+INSTALL_DIR="$USER_HOME/omnisign"
 
 # Fichier de log pour le setup
 LOG_FILE="/var/log/omnisign_setup.log"
@@ -105,13 +116,20 @@ CHROMIUM_BIN="/usr/bin/chromium-browser"
 # 4. Préparer le dossier de l'application
 log_message "Préparation du dossier d'installation $INSTALL_DIR..."
 sudo mkdir -p "$INSTALL_DIR" || error_exit "Échec de la création du dossier $INSTALL_DIR."
-sudo chown -R pi:pi "$INSTALL_DIR" || error_exit "Échec du changement de propriétaire du dossier $INSTALL_DIR."
+
+# Si le script de setup n'est pas déjà dans le dossier final, copier tous les fichiers
+if [ "$(cd "$(dirname "$0")" && pwd)" != "$(cd "$INSTALL_DIR" && pwd)" ]; then
+    log_message "Copie des fichiers de l'application vers $INSTALL_DIR..."
+    sudo cp -r "$(dirname "$0")"/* "$INSTALL_DIR/" || error_exit "Échec de la copie des fichiers vers $INSTALL_DIR."
+fi
+
+sudo chown -R $SUDO_USER_DETECTED:$SUDO_USER_DETECTED "$INSTALL_DIR" || error_exit "Échec du changement de propriétaire du dossier $INSTALL_DIR."
 
 # 5. Installer les dépendances Node.js
 log_message "Installation des dépendances Node.js pour OmniSign..."
 cd "$INSTALL_DIR" || error_exit "Impossible de naviguer vers $INSTALL_DIR."
 # On force l'installation de socket.io-client pour éviter les modules manquants
-sudo -u pi npm install socket.io-client axios fs-extra || error_exit "Échec de l'installation des dépendances npm."
+sudo -u $SUDO_USER_DETECTED npm install socket.io-client axios fs-extra || error_exit "Échec de l'installation des dépendances npm."
 
 # 6. Configurer le service systemd pour sync-engine.js
 log_message "Configuration du service systemd pour sync-engine.js..."
@@ -124,7 +142,7 @@ After=network.target
 WorkingDirectory=$INSTALL_DIR
 ExecStart=/usr/bin/node $INSTALL_DIR/sync-engine.js
 Restart=always
-User=pi
+User=$SUDO_USER_DETECTED
 Environment="PIDYN_DEVICE_ID=$DEVICE_ID"
 Environment="PIDYN_SERVER_URL=$SERVER_URL"
 Environment="PIDYN_API_KEY=$API_KEY"
@@ -141,25 +159,25 @@ sudo systemctl restart omnisign-sync.service
 log_message "Configuration du démarrage automatique du joueur via start_player.sh..."
 
 # Création du dossier d'autostart si inexistant
-mkdir -p /home/pi/.config/autostart
+mkdir -p "$USER_HOME/.config/autostart"
 
-cat <<EOF > /home/pi/.config/autostart/omnisign.desktop
+cat <<EOF > "$USER_HOME/.config/autostart/omnisign.desktop"
 [Desktop Entry]
 Type=Application
 Name=OmniSign Player
-Exec=/home/pi/omnisign/start_player.sh
+Exec=$INSTALL_DIR/start_player.sh
 EOF
 
-chown pi:pi /home/pi/.config/autostart/omnisign.desktop
-chmod +x /home/pi/.config/autostart/omnisign.desktop
+chown $SUDO_USER_DETECTED:$SUDO_USER_DETECTED "$USER_HOME/.config/autostart/omnisign.desktop"
+chmod +x "$USER_HOME/.config/autostart/omnisign.desktop"
 # 8. Nettoyage et finalisation
 log_message "Configuration forcée de LightDM pour l'auto-login..."
 sudo groupadd -r autologin 2>/dev/null
-sudo gpasswd -a pi autologin
+sudo gpasswd -a $SUDO_USER_DETECTED autologin
 sudo mkdir -p /etc/lightdm/lightdm.conf.d
 cat <<EOF | sudo tee /etc/lightdm/lightdm.conf.d/01-autologin.conf > /dev/null
 [Seat:*]
-autologin-user=pi
+autologin-user=$SUDO_USER_DETECTED
 autologin-user-timeout=0
 user-session=openbox
 EOF
@@ -175,26 +193,26 @@ if [ -f "$CMDLINE_FILE" ] && ! grep -q "consoleblank=0" "$CMDLINE_FILE"; then
 fi
 
 # Configurer Openbox pour interdire DPMS et l'écran noir au démarrage de session
-mkdir -p /home/pi/.config/openbox
-cat <<EOF > /home/pi/.config/openbox/autostart
+mkdir -p "$USER_HOME/.config/openbox"
+cat <<EOF > "$USER_HOME/.config/openbox/autostart"
 xset s off &
 xset -dpms &
 xset s noblank &
 EOF
-chown -R pi:pi /home/pi/.config/openbox
+chown -R $SUDO_USER_DETECTED:$SUDO_USER_DETECTED "$USER_HOME/.config/openbox"
 
 sudo systemctl set-default graphical.target
 sudo raspi-config nonint do_boot_behaviour B4 || log_message "Avertissement : Impossible de configurer l'autologin via raspi-config."
 
 # Sécurité supplémentaire : Conversion LF des scripts et forçage des droits sur le dossier OmniSign
 find "$INSTALL_DIR" -name "*.sh" -exec sed -i 's/\r$//' {} +
-sudo chown -R pi:pi "$INSTALL_DIR"
+sudo chown -R $SUDO_USER_DETECTED:$SUDO_USER_DETECTED "$INSTALL_DIR"
 sudo chmod -R 755 "$INSTALL_DIR"
 
 # Nettoyage de toute ancienne planification de veille (DPMS)
 TMP_CRON="/tmp/omnisign_cron"
-sudo -u pi crontab -l 2>/dev/null | grep -v "xset dpms" > "$TMP_CRON" || echo "" > "$TMP_CRON"
-sudo -u pi crontab "$TMP_CRON" && rm "$TMP_CRON"
+sudo -u $SUDO_USER_DETECTED crontab -l 2>/dev/null | grep -v "xset dpms" > "$TMP_CRON" || echo "" > "$TMP_CRON"
+sudo -u $SUDO_USER_DETECTED crontab "$TMP_CRON" && rm "$TMP_CRON"
 sync
 
 log_message "Nettoyage du fichier de setup..."
